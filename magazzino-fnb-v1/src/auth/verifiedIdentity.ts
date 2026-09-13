@@ -1,5 +1,5 @@
 type ClaimsResult = {
-  data: { claims: { sub?: unknown } | null }
+  data: { claims: { sub?: unknown } | null } | null
   error: Error | null
 }
 
@@ -11,6 +11,6 @@ export async function getVerifiedUserId(auth: ClaimsAuthClient): Promise<string 
   const { data, error } = await auth.getClaims()
   if (error) throw error
 
-  const subject = data.claims?.sub
+  const subject = data?.claims?.sub
   return typeof subject === 'string' && subject.length > 0 ? subject : null
 }
