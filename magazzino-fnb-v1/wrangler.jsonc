@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "magazzino-fnb-v1",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-09-13",
+  "send_metrics": false
+}
