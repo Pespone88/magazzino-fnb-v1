@@ -69,7 +69,9 @@ function throwIfError(error: QueryError, context: string): void {
   }
 }
 
-export function createSupabaseAuthGateway(client: SupabaseLike): AuthDataGateway {
+export function createSupabaseAuthGateway(clientValue: unknown): AuthDataGateway {
+  const client = clientValue as SupabaseLike
+
   return {
     async getProfile(userId) {
       const { data, error } = await client
