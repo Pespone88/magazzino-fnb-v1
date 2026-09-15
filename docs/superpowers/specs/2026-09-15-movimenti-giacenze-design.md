@@ -74,15 +74,18 @@ Campi concettuali:
 
 Regole:
 
+- `store_id` deve coincidere sempre con lo store del relativo `store_article` tramite integrità DB, non solo controllo applicativo;
 - `quantity_delta_base` è espresso sempre nell'unità base dell'articolo;
 - non sono ammessi movimenti con quantità zero;
 - quantità positive aumentano `on_hand`, quantità negative lo diminuiscono;
 - il record è immutabile dopo la creazione;
 - nessun `UPDATE` o `DELETE` client sul ledger;
-- `operation_key` impedisce doppie registrazioni in caso di retry della stessa operazione;
-- un reversal punta al movimento originale e usa quantità opposta;
-- un movimento non può essere stornato più volte oltre la quantità originariamente registrata;
-- `unit_cost_snapshot` e `total_value_snapshot` sono congelati al momento del movimento;
+- `operation_key` è obbligatoria e univoca e impedisce doppie registrazioni in caso di retry della stessa operazione;
+- `source_type` è un tipo controllato coerente con i flussi di business, non testo libero;
+- un reversal punta al movimento originale e usa esattamente la quantità opposta;
+- nella V1 lo storno è completo: ogni movimento può avere al massimo un reversal;
+- `unit_cost_snapshot` è congelato al momento del movimento;
+- `total_value_snapshot`, quando il costo è noto, viene calcolato dal database come `abs(quantity_delta_base) × unit_cost_snapshot`, non accettato come valore arbitrario dal client;
 - se non esiste ancora un costo attendibile, il costo storico resta `NULL`: non viene inventato un costo zero;
 - i moduli origine risolvono il costo secondo le proprie regole approvate e lo passano solo attraverso primitive DB fidate, mai tramite scrittura diretta del browser.
 
@@ -107,7 +110,7 @@ Il tipo è controllato dal database e non è testo libero.
 
 ### stock_balances
 
-Una riga per ogni `store_article` che ha avuto o può avere attività stock.
+Una riga per ogni `store_article` che ha attività stock o riserve.
 
 Campi concettuali:
 
@@ -121,6 +124,8 @@ Campi concettuali:
 
 Regole:
 
+- la riga viene creata atomicamente al primo movimento o alla prima riserva; l'assenza di una riga significa saldo zero, non dato sconosciuto;
+- `store_id` deve coincidere con lo store del relativo `store_article` tramite integrità DB;
 - `on_hand >= 0`;
 - `reserved >= 0`;
 - `reserved <= on_hand`;
@@ -156,8 +161,18 @@ Stati:
 - `CONSUMED`
 - `RELEASED`
 
+Tipi di riserva previsti dalla V1:
+
+- rifornimento punto vendita;
+- prestito inter-store;
+- restituzione prestito inter-store.
+
 Regole:
 
+- `reservation_type` è controllato dal database;
+- `store_id` deve coincidere con lo store del relativo `store_article`;
+- `quantity_base > 0` con precisione massima 3 decimali;
+- `operation_key` è obbligatoria e univoca;
 - una riserva `OPEN` aumenta `stock_balances.reserved`;
 - una riserva consumata o rilasciata non viene cancellata;
 - `CONSUMED` significa che l'impegno è stato convertito nel relativo movimento fisico;
@@ -165,7 +180,8 @@ Regole:
 - nessuna riserva può portare `available` sotto zero;
 - la stessa operazione non può creare due volte la stessa riserva;
 - le riserve non scadono automaticamente: la chiusura deve essere deterministica e collegata al flusso origine;
-- il campo `reserved` del saldo deve essere sempre coerente con la somma delle riserve `OPEN`.
+- il campo `reserved` del saldo deve essere sempre coerente con la somma delle riserve `OPEN`;
+- una riserva chiusa non può essere riaperta o chiusa una seconda volta.
 
 ## Semantica delle quantità
 
@@ -256,10 +272,12 @@ Il debito di prestito resta gestito dal modulo Prestiti e si basa sulle quantit�
 
 Qualunque operazione che modifica stock o riserve deve bloccare la riga di saldo interessata durante la transazione database.
 
+Se il saldo non esiste ancora, la primitiva DB deve crearlo in modo concorrente-sicuro prima di applicare il lock e il delta.
+
 Obiettivi:
 
 - due utenti non possono impegnare contemporaneamente la stessa disponibilità oltre il saldo reale;
-- nessun retry HTTP duplica un movimento;
+- nessun retry HTTP duplica un movimento o una riserva;
 - movimento, saldo e chiusura riserva non possono divergere;
 - le operazioni multi-store dei prestiti sono una sola transazione: o vengono applicate entrambe le gambe oppure nessuna.
 
@@ -279,23 +297,27 @@ Il sottosistema espone helper privati riutilizzabili dai moduli di business, ad 
 
 Le funzioni pubbliche/RPC vengono definite per il singolo caso d'uso autorizzato.
 
-Nella prima implementazione del sottosistema può esistere una RPC Admin dedicata alla rettifica straordinaria/manuale; non deve trasformarsi in un endpoint generico che consenta al client di scegliere liberamente tipo movimento, store e semantica.
+Nella prima implementazione vengono esposte soltanto RPC pubbliche dedicate ad azioni concrete previste dallo scope, in particolare rettifica Admin motivata e storno Admin. Non esiste un endpoint pubblico generico che consenta al client di scegliere liberamente tipo movimento, store e semantica.
+
+Le primitive per ricezioni, inventari, rifornimenti e prestiti restano private fino all'implementazione del relativo modulo di business.
 
 ## Reversal / storno
 
 Un movimento errato non viene editato.
 
-Lo storno:
+Lo storno V1 è sempre completo:
 
 1. verifica che il movimento sia stornabile;
-2. verifica che non sia già stato completamente stornato;
-3. crea un nuovo movimento `REVERSAL` con quantità opposta;
+2. verifica che non esista già un reversal dell'originale;
+3. crea un nuovo movimento `REVERSAL` con quantità esattamente opposta;
 4. copia/congela i riferimenti economici necessari dal movimento originale;
 5. collega `reversal_of_movement_id`;
 6. aggiorna il saldo nella stessa transazione;
 7. rifiuta lo storno se produrrebbe uno stock negativo o violerebbe una riserva aperta.
 
 Il record originale rimane sempre leggibile.
+
+Un `REVERSAL` non è a sua volta reversibile nella V1: un eventuale nuovo errore amministrativo viene corretto con una nuova rettifica Admin motivata, evitando catene di storni ambigue.
 
 ## Costi e valorizzazione
 
@@ -308,15 +330,13 @@ Regole:
 - un costo non noto è `NULL`, non `0`;
 - la valorizzazione corrente del magazzino usa `on_hand` e l'ultimo prezzo di acquisto disponibile secondo le regole commerciali già approvate;
 - una valorizzazione non deve fingere precisione quando manca il prezzo: la UI segnala il costo non disponibile;
-- `reserved` non cambia il valore fisicamente presente: il valore di magazzino si basa su `on_hand`, mentre `available` serve alle decisioni operative.
+- `reserved` non cambia il valore fisicamente presente: il valore di magazzino si basa su `on_hand`, mentre `available` rappresenta la quantità non impegnata.
 
 ## Minimo, obiettivo e disponibilità
 
-Con il ledger disponibile, Articoli può finalmente mostrare lo stato stock reale.
+Con il ledger disponibile, Articoli può finalmente mostrare lo stock reale.
 
-Per decisioni operative e stato sotto-minimo viene usata `available`, perché la quantità riservata non è più disponibile per nuovi impegni.
-
-Vengono comunque mostrati separatamente:
+Vengono mostrati separatamente:
 
 - fisico (`on_hand`);
 - riservato (`reserved`);
@@ -324,7 +344,7 @@ Vengono comunque mostrati separatamente:
 - minimo;
 - obiettivo.
 
-Il suggerimento automatico di ordine resta fuori da questo modulo e verrà implementato nel modulo Ordini, usando questi dati.
+Questo modulo non ridefinisce il criterio commerciale di riordino. Il futuro modulo Ordini userà `on_hand`, `reserved` e `available` secondo la regola di approvvigionamento già approvata in quel modulo, evitando di introdurre qui una nuova semantica business.
 
 ## Permessi
 
@@ -344,7 +364,7 @@ Le operazioni stock vengono consentite solo attraverso i flussi operativi a cui 
 
 Legge giacenze, disponibilità e storico del proprio store.
 
-Può originare i flussi operativi già previsti per il magazziniere (ricezioni, inventari, ordini, rifornimenti, movimenti e prestiti quando i relativi moduli vengono implementati), ma non può alterare direttamente ledger, saldo o riserve.
+Può originare i flussi operativi già previsti per il magazziniere quando i relativi moduli vengono implementati, ma non può alterare direttamente ledger, saldo o riserve.
 
 ### Sicurezza trasversale
 
@@ -390,11 +410,10 @@ La lista articoli, ora che esiste una giacenza reale, può mostrare:
 - `on_hand`;
 - `reserved` quando > 0;
 - `available`;
-- indicatore sotto minimo basato su `available`;
 - minimo/obiettivo;
 - fornitore/prezzo già esistenti.
 
-Nessun numero stock viene simulato se non esiste ancora una riga saldo: in assenza di movimenti/riserve il valore operativo è zero, non un valore demo.
+Nessun numero stock viene simulato. Se non esiste ancora una riga `stock_balances`, la UI mostra zero perché per definizione non esistono ancora movimenti o riserve per quell'articolo/store.
 
 ### Dettaglio articolo
 
@@ -425,7 +444,9 @@ Schermata store-first con:
 
 L'interfaccia non espone un generico pulsante “nuovo movimento” ai ruoli operativi.
 
-Per Admin può essere disponibile `Rettifica` come azione separata e chiaramente identificata, con motivo obbligatorio.
+Per Admin è disponibile `Rettifica` come azione separata e chiaramente identificata, con motivo obbligatorio.
+
+Lo storno è disponibile all'Admin solo dal dettaglio di un movimento stornabile.
 
 ## Error handling
 
@@ -460,14 +481,19 @@ Devono esistere controlli/test che verifichino almeno:
 10. Admin legge entrambi.
 11. Quantità `0,375` mantiene precisione.
 12. Un reversal crea un secondo record e conserva l'originale.
-13. Uno storno non può produrre stock negativo.
-14. Una riserva può essere consumata una sola volta.
-15. Una riserva rilasciata non modifica `on_hand`.
-16. Una riserva consumata e il relativo movimento vengono applicati atomicamente.
-17. Operazione inter-store futura può aggiornare entrambe le gambe in una singola transazione.
-18. Il costo storico di un movimento non cambia dopo variazioni prezzo successive.
-19. Nessuna UI mostra stock fittizio o hardcoded.
-20. Nessuna scrittura diretta alle tabelle critiche è consentita via Data API.
+13. Un movimento può essere stornato una sola volta e solo integralmente.
+14. Un reversal non può essere a sua volta stornato nella V1.
+15. Uno storno non può produrre stock negativo.
+16. Una riserva può essere chiusa una sola volta.
+17. Una riserva rilasciata non modifica `on_hand`.
+18. Una riserva consumata e il relativo movimento vengono applicati atomicamente.
+19. Operazione inter-store futura può aggiornare entrambe le gambe in una singola transazione.
+20. Il costo storico di un movimento non cambia dopo variazioni prezzo successive.
+21. Un costo assente resta `NULL`, mai zero inventato.
+22. Nessuna UI mostra stock fittizio o hardcoded.
+23. Nessuna scrittura diretta alle tabelle critiche è consentita via Data API.
+24. L'assenza di `stock_balances` viene letta come saldo zero.
+25. `store_id` e `store_article_id` non possono riferirsi a store differenti.
 
 ## Scope della prima implementazione Movimenti + Giacenze
 
@@ -477,6 +503,7 @@ Incluso:
 - schema `stock_balances`;
 - schema `stock_reservations`;
 - enum/tipi controllati;
+- integrità store/store_article;
 - primitive DB private atomiche;
 - protezione concorrenza;
 - idempotenza;
@@ -491,6 +518,7 @@ Incluso:
 
 Predisposto ma non ancora implementato come flusso completo:
 
+- `OPENING_STOCK` tramite apertura/inventario;
 - `SUPPLIER_RECEIPT`;
 - `STORE_SUPPLY` / `STORE_RETURN`;
 - `INVENTORY_ADJUSTMENT` / `EXTRAORDINARY_ADJUSTMENT`;
