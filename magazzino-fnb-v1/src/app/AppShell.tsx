@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AuthContext } from '../auth/authContext'
+import { CatalogWorkspace } from '../catalog/CatalogWorkspace'
 import type { CatalogGateway } from '../catalog/catalogGateway'
 import { canSelectStore, visibleStoreIds } from '../domain/access'
 import type { StoreId } from '../domain/store'
@@ -32,7 +33,6 @@ function displayName(context: AuthContext): string {
 }
 
 export function AppShell({ context, gateway, onSignOut }: AppShellProps) {
-  void gateway
   const allowedStoreIds = useMemo(
     () => visibleStoreIds(context.actor, context.stores.map((store) => store.id)),
     [context.actor, context.stores],
@@ -80,13 +80,16 @@ export function AppShell({ context, gateway, onSignOut }: AppShellProps) {
   const roleLabel = isAdmin ? 'Admin' : (activeMembership?.role ?? 'Utente')
 
   const content = (() => {
-    if (activeSection === 'articles' && catalogScreen.kind === 'create') {
+    if (activeSection === 'articles') {
       return (
-        <section className="content-panel">
-          <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
-          <h1>Nuovo articolo</h1>
-          <p>Il form guidato viene aperto nello store attivo. I dati centrali saranno riutilizzati quando l’articolo esiste già.</p>
-        </section>
+        <CatalogWorkspace
+          actor={context.actor}
+          gateway={gateway}
+          onScreenChange={setCatalogScreen}
+          screen={catalogScreen}
+          storeId={activeStoreId}
+          stores={allowedStores}
+        />
       )
     }
 
