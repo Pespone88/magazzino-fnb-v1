@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
@@ -26,5 +26,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    exclude: [...configDefaults.exclude, '**/*.node.test.ts', '**/*.node.test.tsx'],
   },
 })

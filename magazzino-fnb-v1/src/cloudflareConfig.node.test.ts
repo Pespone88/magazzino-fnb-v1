@@ -6,16 +6,15 @@ const config = JSON.parse(
   readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8')
 )
 
-test('Cloudflare Pages deploy points at Vite dist output', () => {
+test('Cloudflare Worker serves the Vite dist directory as static assets', () => {
   assert.equal(config.name, 'magazzino-fnb-v1')
-  assert.equal(config.pages_build_output_dir, './dist')
+  assert.equal(config.assets.directory, './dist')
+  assert.equal(config.assets.not_found_handling, 'single-page-application')
 })
 
-test('SPA fallback and security headers are present', () => {
-  const redirects = readFileSync(new URL('../public/_redirects', import.meta.url), 'utf8')
+test('security headers are present for static assets', () => {
   const headers = readFileSync(new URL('../public/_headers', import.meta.url), 'utf8')
 
-  assert.match(redirects, /\/\* \/index\.html 200/)
   assert.match(headers, /X-Content-Type-Options: nosniff/)
   assert.match(headers, /X-Frame-Options: DENY/)
 })

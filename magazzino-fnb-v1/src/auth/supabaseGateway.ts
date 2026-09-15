@@ -2,6 +2,16 @@ import type { AuthDataGateway, MembershipRecord, ProfileRecord, StoreRecord } fr
 import type { GlobalRole, StoreRole } from '../domain/roles.ts'
 
 type QueryError = { message: string } | null
+type QueryResult = { data: unknown; error: QueryError }
+
+type SelectChainLike = PromiseLike<QueryResult> & {
+  eq(column: string, value: unknown): SelectChainLike
+  maybeSingle(): PromiseLike<QueryResult>
+}
+
+type TableBuilderLike = {
+  select(columns: string): SelectChainLike
+}
 
 type ProfileRow = {
   id: string
@@ -24,7 +34,7 @@ type StoreRow = {
 }
 
 type SupabaseLike = {
-  from(table: string): any
+  from(table: string): TableBuilderLike
 }
 
 export function mapProfileRow(row: ProfileRow): ProfileRecord {
@@ -59,7 +69,9 @@ function throwIfError(error: QueryError, context: string): void {
   }
 }
 
-export function createSupabaseAuthGateway(client: SupabaseLike): AuthDataGateway {
+export function createSupabaseAuthGateway(clientValue: unknown): AuthDataGateway {
+  const client = clientValue as SupabaseLike
+
   return {
     async getProfile(userId) {
       const { data, error } = await client

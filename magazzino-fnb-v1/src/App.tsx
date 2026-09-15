@@ -1,6 +1,12 @@
 import { AppShell } from './app/AppShell'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { LoginScreen } from './auth/LoginScreen'
+import { createSupabaseCatalogGateway } from './catalog/supabaseCatalogGateway'
+import { supabase } from './lib/supabaseClient'
+
+const catalogGateway = createSupabaseCatalogGateway(
+  supabase as unknown as Parameters<typeof createSupabaseCatalogGateway>[0],
+)
 
 function AuthenticatedApplication() {
   const { state, signOut, reload } = useAuth()
@@ -35,7 +41,7 @@ function AuthenticatedApplication() {
     )
   }
 
-  return <AppShell context={state.context} onSignOut={signOut} />
+  return <AppShell context={state.context} gateway={catalogGateway} onSignOut={signOut} />
 }
 
 export default function App() {
