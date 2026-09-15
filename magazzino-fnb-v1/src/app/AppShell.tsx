@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { AuthContext } from '../auth/authContext'
 import { CatalogWorkspace } from '../catalog/CatalogWorkspace'
 import type { CatalogGateway } from '../catalog/catalogGateway'
+import { NotificationsPanel } from '../catalog/NotificationsPanel'
+import { SuppliersScreen } from '../catalog/SuppliersScreen'
 import { canSelectStore, visibleStoreIds } from '../domain/access'
 import type { StoreId } from '../domain/store'
 import { MoreScreen } from './MoreScreen'
@@ -115,6 +117,11 @@ export function AppShell({ context, gateway, onSignOut }: AppShellProps) {
           <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
           <h1>{title}</h1>
           <p>Il modulo usa esclusivamente i dati autorizzati dello store selezionato.</p>
+          {moreTarget === 'suppliers' ? (
+            <SuppliersScreen actor={context.actor} gateway={gateway} storeId={activeStoreId} />
+          ) : (
+            <NotificationsPanel gateway={gateway} storeId={activeStoreId} />
+          )}
         </section>
       )
     }
