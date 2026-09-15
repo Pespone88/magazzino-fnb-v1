@@ -20,7 +20,10 @@ const context: AuthContext = {
   ],
 }
 
-const gateway = {} as CatalogGateway
+const gateway = {
+  listCategories: vi.fn().mockResolvedValue([]),
+  listStoreArticles: vi.fn().mockResolvedValue([]),
+} as unknown as CatalogGateway
 
 describe('AppShell', () => {
   it('keeps the store context and approved five-slot mobile navigation', async () => {
