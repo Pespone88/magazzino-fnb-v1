@@ -47,17 +47,26 @@ export function SupplierForm({ storeId, suppliers, gateway, onSaved, onCancel }:
     setBusy(true)
     setError(null)
     try {
-      const centralSupplier = mode === 'new'
-        ? await gateway.createSupplier({ name: name.trim(), vatNumber: vatNumber.trim() || null })
-        : suppliers.find((supplier) => supplier.id === supplierId)
-      if (!centralSupplier) throw new Error('Fornitore non disponibile')
-      await gateway.associateSupplierToStore({
-        storeId,
-        supplierId: centralSupplier.id,
-        customerCode: customerCode.trim() || null,
-        minimumOrderAmount: parsedMinimum,
-        deliveryNotes: deliveryNotes.trim() || null,
-      })
+      if (mode === 'new') {
+        await gateway.createSupplierForStore({
+          storeId,
+          name: name.trim(),
+          vatNumber: vatNumber.trim() || null,
+          customerCode: customerCode.trim() || null,
+          minimumOrderAmount: parsedMinimum,
+          deliveryNotes: deliveryNotes.trim() || null,
+        })
+      } else {
+        const centralSupplier = suppliers.find((supplier) => supplier.id === supplierId)
+        if (!centralSupplier) throw new Error('Fornitore non disponibile')
+        await gateway.associateSupplierToStore({
+          storeId,
+          supplierId: centralSupplier.id,
+          customerCode: customerCode.trim() || null,
+          minimumOrderAmount: parsedMinimum,
+          deliveryNotes: deliveryNotes.trim() || null,
+        })
+      }
       onSaved()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Associazione fornitore non disponibile')
@@ -86,9 +95,9 @@ export function SupplierForm({ storeId, suppliers, gateway, onSaved, onCancel }:
             <label><span>Partita IVA</span><input aria-label="Partita IVA" value={vatNumber} onChange={(event) => setVatNumber(event.target.value)} /></label>
           </>
         )}
-        <label><span>Codice cliente</span><input value={customerCode} onChange={(event) => setCustomerCode(event.target.value)} /></label>
-        <label><span>Ordine minimo €</span><input inputMode="decimal" value={minimumOrder} onChange={(event) => setMinimumOrder(event.target.value)} /></label>
-        <label><span>Note consegna</span><input value={deliveryNotes} onChange={(event) => setDeliveryNotes(event.target.value)} /></label>
+        <label><span>Codice cliente</span><input aria-label="Codice cliente" value={customerCode} onChange={(event) => setCustomerCode(event.target.value)} /></label>
+        <label><span>Ordine minimo €</span><input aria-label="Ordine minimo €" inputMode="decimal" value={minimumOrder} onChange={(event) => setMinimumOrder(event.target.value)} /></label>
+        <label><span>Note consegna</span><input aria-label="Note consegna" value={deliveryNotes} onChange={(event) => setDeliveryNotes(event.target.value)} /></label>
       </div>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="button-row">
