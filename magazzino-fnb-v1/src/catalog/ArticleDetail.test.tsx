@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActorAccess } from '../domain/roles'
 import type { CatalogGateway } from './catalogGateway'
 import type { ArticleDetail as ArticleDetailModel } from './types'
@@ -28,6 +28,8 @@ const stores = [
   { id: 'store-eccellenze', name: 'Eccellenze della Costiera' },
   { id: 'store-nonna-titti', name: 'Nonna Titti' },
 ]
+
+afterEach(() => cleanup())
 
 describe('ArticleDetail', () => {
   it('shows package data and admin structural actions without stock metrics', () => {
