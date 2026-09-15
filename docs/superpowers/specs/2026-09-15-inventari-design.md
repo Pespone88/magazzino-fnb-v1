@@ -118,7 +118,7 @@ Regole:
 
 ### `inventory_counts`
 
-Registro append-only dei conteggi e riconteggi.
+Registro storico dei conteggi e riconteggi.
 
 Campi principali:
 
@@ -131,17 +131,18 @@ Campi principali:
 - `counted_by`
 - `preliminary_reason` nullable
 - `note` nullable
-- `submitted_at`
+- `submitted_at` nullable
 
 Regole:
 
 - quantità >= 0, massimo 3 decimali;
 - una riga ha al massimo un conteggio per round;
+- finché il round è ancora `IN_PROGRESS` o `RECOUNT` e il conteggio non è stato inviato, l'autore può correggere la propria quantità bozza per quel round;
+- `Invia in verifica` valorizza `submitted_at` e da quel momento il record del round è immutabile;
 - un nuovo round non sovrascrive il precedente;
 - il magazziniere non può leggere conteggi di round precedenti durante `IN_PROGRESS` o `RECOUNT`;
 - Admin può leggere sempre tutto;
 - Responsabile/Vice leggono teorico, differenze e storico dei conteggi solo da `IN_REVIEW` in poi;
-- i conteggi sono immutabili dopo l'invio del round in verifica;
 - per un conteggio straordinario con differenza non zero `preliminary_reason` è obbligatorio.
 
 Motivi preliminari approvati:
