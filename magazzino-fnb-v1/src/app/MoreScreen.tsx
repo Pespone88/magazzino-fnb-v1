@@ -1,9 +1,10 @@
 type MoreScreenProps = {
   onOpenSuppliers(): void
   onOpenNotifications(): void
+  onOpenMovements(): void
 }
 
-export function MoreScreen({ onOpenSuppliers, onOpenNotifications }: MoreScreenProps) {
+export function MoreScreen({ onOpenSuppliers, onOpenNotifications, onOpenMovements }: MoreScreenProps) {
   return (
     <section className="more-grid" aria-label="Altri moduli">
       <button className="module-card" onClick={onOpenSuppliers} type="button">
@@ -14,12 +15,12 @@ export function MoreScreen({ onOpenSuppliers, onOpenNotifications }: MoreScreenP
         <strong>Notifiche</strong>
         <span>Variazioni prezzo e avvisi che richiedono attenzione.</span>
       </button>
+      <button className="module-card" onClick={onOpenMovements} type="button">
+        <strong>Movimenti</strong>
+        <span>Giacenze reali, storico, rettifiche e storni autorizzati.</span>
+      </button>
       <div className="module-card disabled-card" aria-disabled="true">
         <strong>Ricezioni</strong>
-        <span>Prossimamente</span>
-      </div>
-      <div className="module-card disabled-card" aria-disabled="true">
-        <strong>Movimenti</strong>
         <span>Prossimamente</span>
       </div>
       <div className="module-card disabled-card" aria-disabled="true">

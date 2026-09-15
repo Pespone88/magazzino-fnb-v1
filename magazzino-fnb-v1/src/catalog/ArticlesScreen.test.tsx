@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StockBalance } from '../stock/types'
 import type { StoreArticleSummary } from './types'
 import { ArticlesScreen } from './ArticlesScreen'
 
@@ -20,20 +21,51 @@ const article: StoreArticleSummary = {
   currentPackagePrice: 8.4,
 }
 
+const balance: StockBalance = {
+  storeArticleId: 'sa-1',
+  storeId: 'store-1',
+  onHand: 20,
+  reserved: 5,
+  available: 15,
+  currentUnitCost: null,
+  currentValue: null,
+}
+
+afterEach(() => cleanup())
+
 describe('ArticlesScreen', () => {
-  it('shows catalog data and thresholds without inventing stock metrics', () => {
+  it('shows real physical, reserved and available stock', () => {
     render(
       <ArticlesScreen
         articles={[article]}
         categories={[{ id: 'cat-1', name: 'Bevande', active: true }]}
         isAdmin
         onOpen={vi.fn()}
+        stockByArticleId={new Map([['sa-1', balance]])}
       />,
     )
 
     expect(screen.getByText('Acqua naturale 50cl')).toBeInTheDocument()
     expect(screen.getByText(/Bevande · PZ/)).toBeInTheDocument()
+    expect(screen.getByText('Fisico 20 PZ')).toBeInTheDocument()
+    expect(screen.getByText('Riservato 5 PZ')).toBeInTheDocument()
+    expect(screen.getByText('Disponibile 15 PZ')).toBeInTheDocument()
     expect(screen.getByText('Min 20 / Obiettivo 40')).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/Giacenza|Sotto minimo|Valore magazzino/i)
+  })
+
+  it('shows zero when no balance row exists instead of inventing stock', () => {
+    render(
+      <ArticlesScreen
+        articles={[article]}
+        categories={[{ id: 'cat-1', name: 'Bevande', active: true }]}
+        isAdmin
+        onOpen={vi.fn()}
+        stockByArticleId={new Map()}
+      />,
+    )
+
+    expect(screen.getByText('Fisico 0 PZ')).toBeInTheDocument()
+    expect(screen.getByText('Disponibile 0 PZ')).toBeInTheDocument()
+    expect(screen.queryByText(/Riservato/)).not.toBeInTheDocument()
   })
 })

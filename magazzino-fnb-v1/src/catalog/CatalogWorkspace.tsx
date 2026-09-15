@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { CatalogScreenState } from '../app/AppShell'
 import type { ActorAccess } from '../domain/roles'
 import type { StoreSummary } from '../domain/store'
+import type { StockGateway } from '../stock/stockGateway'
+import type { StockBalance } from '../stock/types'
 import type { CatalogGateway } from './catalogGateway'
 import type { ArticleDetail as ArticleDetailModel, Category, StoreArticleSummary } from './types'
 import { ArticleDetail } from './ArticleDetail'
@@ -13,13 +15,25 @@ type CatalogWorkspaceProps = {
   stores: readonly StoreSummary[]
   actor: ActorAccess
   gateway: CatalogGateway
+  stockGateway: StockGateway
   screen: CatalogScreenState
   onScreenChange(next: CatalogScreenState): void
+  onOpenMovementsForArticle(storeArticleId: string): void
 }
 
-export function CatalogWorkspace({ storeId, stores, actor, gateway, screen, onScreenChange }: CatalogWorkspaceProps) {
+export function CatalogWorkspace({
+  storeId,
+  stores,
+  actor,
+  gateway,
+  stockGateway,
+  screen,
+  onScreenChange,
+  onOpenMovementsForArticle,
+}: CatalogWorkspaceProps) {
   const [articles, setArticles] = useState<StoreArticleSummary[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [stockByArticleId, setStockByArticleId] = useState<ReadonlyMap<string, StockBalance>>(new Map())
   const [detail, setDetail] = useState<ArticleDetailModel | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,11 +46,16 @@ export function CatalogWorkspace({ storeId, stores, actor, gateway, screen, onSc
     setLoading(true)
     setError(null)
 
-    void Promise.all([gateway.listCategories(), gateway.listStoreArticles(storeId)])
-      .then(([nextCategories, nextArticles]) => {
+    void Promise.all([
+      gateway.listCategories(),
+      gateway.listStoreArticles(storeId),
+      stockGateway.listBalances(storeId),
+    ])
+      .then(([nextCategories, nextArticles, nextBalances]) => {
         if (cancelled) return
         setCategories(nextCategories)
         setArticles(nextArticles)
+        setStockByArticleId(new Map(nextBalances.map((balance) => [balance.storeArticleId, balance])))
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : 'Catalogo non disponibile')
@@ -46,7 +65,7 @@ export function CatalogWorkspace({ storeId, stores, actor, gateway, screen, onSc
       })
 
     return () => { cancelled = true }
-  }, [gateway, revision, storeId])
+  }, [gateway, revision, stockGateway, storeId])
 
   useEffect(() => {
     if (screen.kind !== 'detail') {
@@ -100,8 +119,10 @@ export function CatalogWorkspace({ storeId, stores, actor, gateway, screen, onSc
             article={detail}
             categories={categories}
             gateway={gateway}
+            stockGateway={stockGateway}
             onBack={() => onScreenChange({ kind: 'list' })}
             onChanged={refresh}
+            onOpenMovements={() => onOpenMovementsForArticle(detail.id)}
             stores={stores}
           />
         )}
@@ -113,7 +134,7 @@ export function CatalogWorkspace({ storeId, stores, actor, gateway, screen, onSc
     <section className="content-panel catalog-workspace">
       <span className="eyebrow">CATALOGO STORE</span>
       <h1>Articoli</h1>
-      <p>Referenze associate allo store, soglie operative e fornitore preferito.</p>
+      <p>Referenze associate allo store, stock reale, soglie operative e fornitore preferito.</p>
       {loading && articles.length === 0 && <div className="empty-state">Caricamento catalogo…</div>}
       {error && <div className="form-error" role="alert">{error}</div>}
       {!loading && !error && (
@@ -122,6 +143,7 @@ export function CatalogWorkspace({ storeId, stores, actor, gateway, screen, onSc
           categories={categories}
           isAdmin={actor.globalRole === 'ADMIN'}
           onOpen={(storeArticleId) => onScreenChange({ kind: 'detail', storeArticleId })}
+          stockByArticleId={stockByArticleId}
         />
       )}
     </section>

@@ -1,6 +1,9 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { ActorAccess } from '../domain/roles'
 import type { StoreSummary } from '../domain/store'
+import type { StockGateway } from '../stock/stockGateway'
+import { StockSummary } from '../stock/StockSummary'
+import type { StockBalance, StockMovement } from '../stock/types'
 import type { CatalogGateway } from './catalogGateway'
 import { canManageCatalog } from './permissions'
 import type { ArticleDetail as ArticleDetailModel, BaseUnit, Category } from './types'
@@ -14,11 +17,28 @@ type ArticleDetailProps = {
   categories: Category[]
   stores: readonly StoreSummary[]
   gateway: CatalogGateway
+  stockGateway: StockGateway
   onBack(): void
   onChanged(): void
+  onOpenMovements(): void
 }
 
-export function ArticleDetail({ actor, article, categories, stores, gateway, onBack, onChanged }: ArticleDetailProps) {
+function formatMovementQuantity(movement: StockMovement): string {
+  const value = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 3 }).format(movement.quantityDelta)
+  return `${movement.quantityDelta > 0 ? '+' : ''}${value} ${movement.baseUnit}`
+}
+
+export function ArticleDetail({
+  actor,
+  article,
+  categories,
+  stores,
+  gateway,
+  stockGateway,
+  onBack,
+  onChanged,
+  onOpenMovements,
+}: ArticleDetailProps) {
   const canManage = canManageCatalog(actor)
   const [editing, setEditing] = useState(false)
   const [associating, setAssociating] = useState(false)
@@ -32,11 +52,37 @@ export function ArticleDetail({ actor, article, categories, stores, gateway, onB
   const [active, setActive] = useState(article.active)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [stockBalance, setStockBalance] = useState<StockBalance | null>(null)
+  const [recentMovements, setRecentMovements] = useState<StockMovement[]>([])
+  const [stockLoading, setStockLoading] = useState(true)
+  const [stockError, setStockError] = useState<string | null>(null)
 
   const otherStore = useMemo(
     () => stores.find((store) => store.id !== article.storeId) ?? null,
     [article.storeId, stores],
   )
+
+  useEffect(() => {
+    let cancelled = false
+    setStockLoading(true)
+    setStockError(null)
+    void Promise.all([
+      stockGateway.getBalance(article.storeId, article.id),
+      stockGateway.listRecentMovements(article.id, 5),
+    ])
+      .then(([balance, movements]) => {
+        if (cancelled) return
+        setStockBalance(balance)
+        setRecentMovements(movements)
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setStockError(cause instanceof Error ? cause.message : 'Dati magazzino non disponibili')
+      })
+      .finally(() => {
+        if (!cancelled) setStockLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [article.id, article.storeId, stockGateway])
 
   const save = async (event: FormEvent) => {
     event.preventDefault()
@@ -160,6 +206,36 @@ export function ArticleDetail({ actor, article, categories, stores, gateway, onB
           targetStoreName={otherStore.name}
         />
       )}
+
+      <section className="article-stock-panel" aria-label="Magazzino articolo">
+        <div className="section-toolbar">
+          <div>
+            <span className="eyebrow">MAGAZZINO</span>
+            <h2>Giacenza</h2>
+          </div>
+          <button className="secondary-button" onClick={onOpenMovements} type="button">Vedi tutti i movimenti</button>
+        </div>
+        {stockLoading && <div className="empty-state">Caricamento giacenza…</div>}
+        {stockError && <div className="form-error" role="alert">{stockError}</div>}
+        {!stockLoading && !stockError && stockBalance && (
+          <>
+            <StockSummary balance={stockBalance} unit={article.baseUnit} />
+            <div className="recent-stock-movements">
+              <h3>Ultimi movimenti</h3>
+              {recentMovements.map((movement) => (
+                <div className="recent-stock-row" key={movement.id}>
+                  <div>
+                    <strong>{movement.movementType}</strong>
+                    <small>{new Date(movement.occurredAt).toLocaleString('it-IT')} · {movement.createdByName}</small>
+                  </div>
+                  <strong>{formatMovementQuantity(movement)}</strong>
+                </div>
+              ))}
+              {recentMovements.length === 0 && <div className="empty-state">Nessun movimento registrato.</div>}
+            </div>
+          </>
+        )}
+      </section>
 
       <ArticleSuppliersPanel article={article} canManage={canManage} gateway={gateway} onChanged={onChanged} />
     </section>
