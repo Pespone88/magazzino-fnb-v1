@@ -29,14 +29,47 @@ type QueryError = {
   hint?: string | null
 } | null
 
-type SupabaseLike = {
-  from(table: string): any
-  rpc(name: string, args?: Record<string, unknown>): Promise<{ data: unknown; error: QueryError }>
+type QueryResult = { data: unknown; error: QueryError }
+
+type QueryChainLike = PromiseLike<QueryResult> & {
+  select(columns?: string): QueryChainLike
+  eq(column: string, value: unknown): QueryChainLike
+  order(column: string, options?: { ascending?: boolean }): QueryChainLike
+  single(): PromiseLike<QueryResult>
+  maybeSingle(): PromiseLike<QueryResult>
 }
 
-function relationOne<T = any>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) return value[0] ?? null
-  return value ?? null
+type TableBuilderLike = {
+  select(columns?: string): QueryChainLike
+  insert(values: unknown): QueryChainLike
+  update(values: unknown): QueryChainLike
+}
+
+type SupabaseLike = {
+  from(table: string): TableBuilderLike
+  rpc(name: string, args?: Record<string, unknown>): PromiseLike<QueryResult>
+}
+
+type DbRow = Record<string, unknown>
+
+function asRow(value: unknown): DbRow | null {
+  if (Array.isArray(value)) return asRow(value[0])
+  return value !== null && typeof value === 'object' ? value as DbRow : null
+}
+
+function asRows(value: unknown): DbRow[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is DbRow => item !== null && typeof item === 'object')
+    : []
+}
+
+function stringFromDb(value: unknown, field: string): string {
+  if (typeof value !== 'string') throw new Error(`Campo ${field} non valido`)
+  return value
+}
+
+function nullableStringFromDb(value: unknown): string | null {
+  return value === null || value === undefined ? null : stringFromDb(value, 'testo')
 }
 
 export function numericFromDb(value: unknown): number {
@@ -78,91 +111,94 @@ function throwCatalogError(error: QueryError): void {
   if (error) throw mapCatalogError(error)
 }
 
-export function mapStoreArticleRow(row: any): StoreArticleSummary {
-  const article = relationOne(row.articles)
-  const category = relationOne(article?.categories)
+export function mapStoreArticleRow(row: DbRow): StoreArticleSummary {
+  const article = asRow(row.articles)
+  const category = asRow(article?.categories)
   if (!article || !category) throw new Error('Dati articolo incompleti')
 
-  const links = (Array.isArray(row.store_article_suppliers) ? row.store_article_suppliers : [])
-    .filter((link: any) => link.active && link.is_preferred)
-  const preferred = links[0] ?? null
-  const storeSupplier = relationOne(preferred?.store_suppliers)
-  const supplier = relationOne(storeSupplier?.suppliers)
+  const preferred = asRows(row.store_article_suppliers)
+    .find((link) => Boolean(link.active) && Boolean(link.is_preferred)) ?? null
+  const storeSupplier = asRow(preferred?.store_suppliers)
+  const supplier = asRow(storeSupplier?.suppliers)
 
   return {
-    id: row.id,
-    articleId: row.article_id,
-    storeId: row.store_id,
-    name: article.name,
-    categoryId: article.category_id,
-    categoryName: category.name,
-    baseUnit: article.base_unit as BaseUnit,
-    ean: article.ean ?? null,
+    id: stringFromDb(row.id, 'store_article.id'),
+    articleId: stringFromDb(row.article_id, 'store_article.article_id'),
+    storeId: stringFromDb(row.store_id, 'store_article.store_id'),
+    name: stringFromDb(article.name, 'article.name'),
+    categoryId: stringFromDb(article.category_id, 'article.category_id'),
+    categoryName: stringFromDb(category.name, 'category.name'),
+    baseUnit: stringFromDb(article.base_unit, 'article.base_unit') as BaseUnit,
+    ean: nullableStringFromDb(article.ean),
     packageQuantity: numericFromDb(article.package_quantity),
     minStock: numericFromDb(row.min_stock),
     targetStock: numericFromDb(row.target_stock),
     active: Boolean(row.active),
-    preferredSupplierName: supplier?.name ?? null,
+    preferredSupplierName: supplier ? stringFromDb(supplier.name, 'supplier.name') : null,
     currentPackagePrice: preferred ? numericFromDb(preferred.current_package_price) : null,
   }
 }
 
-function mapArticleSupplierRow(row: any): ArticleSupplierSummary {
-  const storeSupplier = relationOne(row.store_suppliers)
-  const supplier = relationOne(storeSupplier?.suppliers)
+function mapArticleSupplierRow(row: DbRow): ArticleSupplierSummary {
+  const storeSupplier = asRow(row.store_suppliers)
+  const supplier = asRow(storeSupplier?.suppliers)
   if (!supplier) throw new Error('Dati fornitore incompleti')
   return {
-    id: row.id,
-    supplierId: supplier.id,
-    supplierName: supplier.name,
-    supplierArticleCode: row.supplier_article_code ?? null,
+    id: stringFromDb(row.id, 'article_supplier.id'),
+    supplierId: stringFromDb(supplier.id, 'supplier.id'),
+    supplierName: stringFromDb(supplier.name, 'supplier.name'),
+    supplierArticleCode: nullableStringFromDb(row.supplier_article_code),
     currentPackagePrice: numericFromDb(row.current_package_price),
     isPreferred: Boolean(row.is_preferred),
     active: Boolean(row.active),
   }
 }
 
-function mapCategoryRow(row: any): Category {
-  return { id: row.id, name: row.name, active: Boolean(row.active) }
-}
-
-function mapSupplierRow(row: any): SupplierSummary {
+function mapCategoryRow(row: DbRow): Category {
   return {
-    id: row.id,
-    name: row.name,
-    vatNumber: row.vat_number ?? null,
-    taxCode: row.tax_code ?? null,
-    email: row.email ?? null,
-    phone: row.phone ?? null,
-    notes: row.notes ?? null,
+    id: stringFromDb(row.id, 'category.id'),
+    name: stringFromDb(row.name, 'category.name'),
     active: Boolean(row.active),
   }
 }
 
-function mapStoreSupplierRow(row: any): StoreSupplierSummary {
-  const supplier = relationOne(row.suppliers)
+function mapSupplierRow(row: DbRow): SupplierSummary {
+  return {
+    id: stringFromDb(row.id, 'supplier.id'),
+    name: stringFromDb(row.name, 'supplier.name'),
+    vatNumber: nullableStringFromDb(row.vat_number),
+    taxCode: nullableStringFromDb(row.tax_code),
+    email: nullableStringFromDb(row.email),
+    phone: nullableStringFromDb(row.phone),
+    notes: nullableStringFromDb(row.notes),
+    active: Boolean(row.active),
+  }
+}
+
+function mapStoreSupplierRow(row: DbRow): StoreSupplierSummary {
+  const supplier = asRow(row.suppliers)
   if (!supplier) throw new Error('Dati fornitore incompleti')
   return {
     ...mapSupplierRow(supplier),
-    storeSupplierId: row.id,
-    storeId: row.store_id,
-    customerCode: row.customer_code ?? null,
+    storeSupplierId: stringFromDb(row.id, 'store_supplier.id'),
+    storeId: stringFromDb(row.store_id, 'store_supplier.store_id'),
+    customerCode: nullableStringFromDb(row.customer_code),
     minimumOrderAmount: nullableNumericFromDb(row.minimum_order_amount),
-    deliveryNotes: row.delivery_notes ?? null,
+    deliveryNotes: nullableStringFromDb(row.delivery_notes),
     storeActive: Boolean(row.active),
   }
 }
 
-function mapCandidateRow(row: any): ArticleCandidate {
-  const category = relationOne(row.categories)
+function mapCandidateRow(row: DbRow): ArticleCandidate {
+  const category = asRow(row.categories)
   if (!category) throw new Error('Categoria articolo non disponibile')
   return {
-    articleId: row.id,
-    name: row.name,
-    categoryId: row.category_id,
-    categoryName: category.name,
-    baseUnit: row.base_unit as BaseUnit,
-    ean: row.ean ?? null,
+    articleId: stringFromDb(row.id, 'article.id'),
+    name: stringFromDb(row.name, 'article.name'),
+    categoryId: stringFromDb(row.category_id, 'article.category_id'),
+    categoryName: stringFromDb(category.name, 'category.name'),
+    baseUnit: stringFromDb(row.base_unit, 'article.base_unit') as BaseUnit,
+    ean: nullableStringFromDb(row.ean),
     packageQuantity: numericFromDb(row.package_quantity),
   }
 }
@@ -187,7 +223,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
     async listCategories() {
       const { data, error } = await client.from('categories').select('id, name, active').order('name')
       throwCatalogError(error)
-      return (data ?? []).map(mapCategoryRow)
+      return asRows(data).map(mapCategoryRow)
     },
 
     async createCategory(name) {
@@ -197,7 +233,9 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         .select('id, name, active')
         .single()
       throwCatalogError(error)
-      return mapCategoryRow(data)
+      const row = asRow(data)
+      if (!row) throw new Error('Categoria non restituita dal database')
+      return mapCategoryRow(row)
     },
 
     async listStoreArticles(storeId) {
@@ -207,7 +245,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         .eq('store_id', storeId)
         .order('created_at', { ascending: false })
       throwCatalogError(error)
-      return (data ?? []).map(mapStoreArticleRow)
+      return asRows(data).map(mapStoreArticleRow)
     },
 
     async getStoreArticle(storeArticleId) {
@@ -218,22 +256,23 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         .maybeSingle()
       throwCatalogError(error)
       if (!data) return null
-      const base = mapStoreArticleRow(data)
-      const suppliers = (Array.isArray(data.store_article_suppliers) ? data.store_article_suppliers : [])
-        .map(mapArticleSupplierRow)
+      const row = asRow(data)
+      if (!row) throw new Error('Articolo non restituito dal database')
+      const base = mapStoreArticleRow(row)
+      const suppliers = asRows(row.store_article_suppliers).map(mapArticleSupplierRow)
       return { ...base, suppliers } satisfies ArticleDetail
     },
 
     async findDuplicateArticles(input) {
       const fields = 'id, name, category_id, base_unit, ean, package_quantity, categories!articles_category_id_fkey(id, name)'
-      const rows: any[] = []
+      const rows: DbRow[] = []
       const normalizedName = normalizeArticleName(input.name)
       const ean = input.ean?.trim() || null
 
       if (ean) {
         const { data, error } = await client.from('articles').select(fields).eq('ean', ean)
         throwCatalogError(error)
-        rows.push(...(data ?? []))
+        rows.push(...asRows(data))
       }
 
       if (normalizedName) {
@@ -243,11 +282,14 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
           .eq('normalized_name', normalizedName)
           .eq('base_unit', input.baseUnit)
         throwCatalogError(error)
-        rows.push(...(data ?? []))
+        rows.push(...asRows(data))
       }
 
       const unique = new Map<string, ArticleCandidate>()
-      for (const row of rows) unique.set(row.id, mapCandidateRow(row))
+      for (const row of rows) {
+        const candidate = mapCandidateRow(row)
+        unique.set(candidate.articleId, candidate)
+      }
       return [...unique.values()]
     },
 
@@ -263,7 +305,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         p_target_stock: formatQuantityForDb(input.targetStock),
       })
       throwCatalogError(error)
-      return data as string
+      return stringFromDb(data, 'admin_create_store_article')
     },
 
     async associateArticleToStore(input: AssociateArticleInput) {
@@ -274,7 +316,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         p_target_stock: formatQuantityForDb(input.targetStock),
       })
       throwCatalogError(error)
-      return data as string
+      return stringFromDb(data, 'admin_associate_article_to_store')
     },
 
     async updateArticleCore(articleId: string, input: UpdateArticleInput) {
@@ -306,7 +348,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         .select('id, name, vat_number, tax_code, email, phone, notes, active')
         .order('name')
       throwCatalogError(error)
-      return (data ?? []).map(mapSupplierRow)
+      return asRows(data).map(mapSupplierRow)
     },
 
     async listStoreSuppliers(storeId) {
@@ -320,7 +362,9 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         `)
         .eq('store_id', storeId)
       throwCatalogError(error)
-      return (data ?? []).map(mapStoreSupplierRow).sort((a: StoreSupplierSummary, b: StoreSupplierSummary) => a.name.localeCompare(b.name))
+      return asRows(data)
+        .map(mapStoreSupplierRow)
+        .sort((a: StoreSupplierSummary, b: StoreSupplierSummary) => a.name.localeCompare(b.name))
     },
 
     async createSupplier(input: CreateSupplierInput) {
@@ -333,7 +377,9 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         notes: input.notes?.trim() || null,
       }).select('id, name, vat_number, tax_code, email, phone, notes, active').single()
       throwCatalogError(error)
-      return mapSupplierRow(data)
+      const row = asRow(data)
+      if (!row) throw new Error('Fornitore non restituito dal database')
+      return mapSupplierRow(row)
     },
 
     async associateSupplierToStore(input: AssociateSupplierInput) {
@@ -345,7 +391,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         p_delivery_notes: input.deliveryNotes?.trim() || null,
       })
       throwCatalogError(error)
-      return data as string
+      return stringFromDb(data, 'admin_associate_supplier_to_store')
     },
 
     async linkArticleSupplier(input: LinkArticleSupplierInput) {
@@ -358,7 +404,7 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         p_is_preferred: input.isPreferred,
       })
       throwCatalogError(error)
-      return data as string
+      return stringFromDb(data, 'admin_link_article_supplier')
     },
 
     async setPreferredSupplier(linkId) {
@@ -383,17 +429,17 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         percent_change, source, recorded_at
       `).eq('store_article_supplier_id', linkId).order('recorded_at', { ascending: false })
       throwCatalogError(error)
-      return (data ?? []).map((row: any): PurchasePriceHistoryEntry => ({
-        id: row.id,
+      return asRows(data).map((row): PurchasePriceHistoryEntry => ({
+        id: stringFromDb(row.id, 'price_history.id'),
         packagePrice: numericFromDb(row.package_price),
         packageQuantitySnapshot: numericFromDb(row.package_quantity_snapshot),
-        baseUnitSnapshot: row.base_unit_snapshot as BaseUnit,
+        baseUnitSnapshot: stringFromDb(row.base_unit_snapshot, 'price_history.base_unit') as BaseUnit,
         unitPriceSnapshot: numericFromDb(row.unit_price_snapshot),
         previousPackagePrice: nullableNumericFromDb(row.previous_package_price),
         absoluteChange: nullableNumericFromDb(row.absolute_change),
         percentChange: nullableNumericFromDb(row.percent_change),
-        source: row.source,
-        recordedAt: row.recorded_at,
+        source: stringFromDb(row.source, 'price_history.source') as PurchasePriceHistoryEntry['source'],
+        recordedAt: stringFromDb(row.recorded_at, 'price_history.recorded_at'),
       }))
     },
 
@@ -402,16 +448,16 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
         id, store_id, severity, title, body, entity_type, entity_id, read_at, created_at
       `).order('created_at', { ascending: false })
       throwCatalogError(error)
-      return (data ?? []).map((row: any): PriceNotification => ({
-        id: row.id,
-        storeId: row.store_id ?? null,
-        severity: row.severity,
-        title: row.title,
-        body: row.body,
-        entityType: row.entity_type,
-        entityId: row.entity_id,
-        readAt: row.read_at ?? null,
-        createdAt: row.created_at,
+      return asRows(data).map((row): PriceNotification => ({
+        id: stringFromDb(row.id, 'notification.id'),
+        storeId: nullableStringFromDb(row.store_id),
+        severity: stringFromDb(row.severity, 'notification.severity') as PriceNotification['severity'],
+        title: stringFromDb(row.title, 'notification.title'),
+        body: stringFromDb(row.body, 'notification.body'),
+        entityType: stringFromDb(row.entity_type, 'notification.entity_type'),
+        entityId: stringFromDb(row.entity_id, 'notification.entity_id'),
+        readAt: nullableStringFromDb(row.read_at),
+        createdAt: stringFromDb(row.created_at, 'notification.created_at'),
       }))
     },
 
