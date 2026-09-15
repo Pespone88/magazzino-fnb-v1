@@ -84,6 +84,15 @@ export interface CreateSupplierInput {
   notes?: string | null
 }
 
+export interface CreateSupplierForStoreInput {
+  storeId: string
+  name: string
+  vatNumber?: string | null
+  customerCode?: string | null
+  minimumOrderAmount?: number | null
+  deliveryNotes?: string | null
+}
+
 export interface AssociateSupplierInput {
   storeId: string
   supplierId: string
@@ -126,6 +135,7 @@ export interface CatalogGateway {
   listSuppliers(): Promise<SupplierSummary[]>
   listStoreSuppliers(storeId: string): Promise<StoreSupplierSummary[]>
   createSupplier(input: CreateSupplierInput): Promise<SupplierSummary>
+  createSupplierForStore(input: CreateSupplierForStoreInput): Promise<string>
   associateSupplierToStore(input: AssociateSupplierInput): Promise<string>
   linkArticleSupplier(input: LinkArticleSupplierInput): Promise<string>
   setPreferredSupplier(linkId: string): Promise<void>
