@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogGateway } from '../catalog/catalogGateway'
 import type { ActorAccess } from '../domain/roles'
 import type { StockGateway } from './stockGateway'
@@ -29,19 +29,21 @@ function stockGateway(): StockGateway {
 const admin: ActorAccess = { globalRole: 'ADMIN', memberships: [] }
 const warehouse: ActorAccess = { globalRole: 'USER', memberships: [{ storeId: 'store-1', role: 'MAGAZZINIERE' }] }
 
+afterEach(() => cleanup())
+
 describe('StockMovementsScreen', () => {
   it('shows movement history and admin actions', async () => {
     const gateway = stockGateway()
     render(<StockMovementsScreen actor={admin} storeId="store-1" gateway={gateway} catalogGateway={catalogGateway} />)
-    expect(await screen.findByText('Acqua')).toBeInTheDocument()
-    expect(screen.getByText('+10 PZ')).toBeInTheDocument()
+    expect(await screen.findByText('+10 PZ')).toBeInTheDocument()
+    expect(screen.getByText('Apertura')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Rettifica' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Storna' })).toBeInTheDocument()
   })
 
   it('hides arbitrary stock actions from non-admin users', async () => {
     render(<StockMovementsScreen actor={warehouse} storeId="store-1" gateway={stockGateway()} catalogGateway={catalogGateway} />)
-    expect(await screen.findByText('Acqua')).toBeInTheDocument()
+    expect(await screen.findByText('+10 PZ')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Rettifica' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Storna' })).not.toBeInTheDocument()
   })
@@ -63,7 +65,6 @@ describe('StockMovementsScreen', () => {
   it('starts with the requested article filter', async () => {
     const gateway = stockGateway()
     render(<StockMovementsScreen actor={admin} storeId="store-1" gateway={gateway} catalogGateway={catalogGateway} initialStoreArticleId="sa-1" />)
-    await screen.findByText('Acqua')
-    expect(gateway.listMovements).toHaveBeenCalledWith('store-1', expect.objectContaining({ storeArticleId: 'sa-1' }))
+    await waitFor(() => expect(gateway.listMovements).toHaveBeenCalledWith('store-1', expect.objectContaining({ storeArticleId: 'sa-1' })))
   })
 })
