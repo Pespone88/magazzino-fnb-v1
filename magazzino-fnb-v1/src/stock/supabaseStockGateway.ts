@@ -212,13 +212,21 @@ async function loadReversedIds(
   )
 }
 
+function localDateBoundaryIso(value: string, endOfDay: boolean): string {
+  const [year, month, day] = value.split('-').map(Number)
+  const date = endOfDay
+    ? new Date(year, month - 1, day, 23, 59, 59, 999)
+    : new Date(year, month - 1, day, 0, 0, 0, 0)
+  return date.toISOString()
+}
+
 function applyMovementFilters(query: QueryChainLike, filters?: MovementFilters): QueryChainLike {
   if (!filters) return query
   let next = query
   if (filters.storeArticleId) next = next.eq('store_article_id', filters.storeArticleId)
   if (filters.movementType) next = next.eq('movement_type', filters.movementType)
-  if (filters.fromDate) next = next.gte('occurred_at', `${filters.fromDate}T00:00:00.000Z`)
-  if (filters.toDate) next = next.lte('occurred_at', `${filters.toDate}T23:59:59.999Z`)
+  if (filters.fromDate) next = next.gte('occurred_at', localDateBoundaryIso(filters.fromDate, false))
+  if (filters.toDate) next = next.lte('occurred_at', localDateBoundaryIso(filters.toDate, true))
   return next
 }
 
