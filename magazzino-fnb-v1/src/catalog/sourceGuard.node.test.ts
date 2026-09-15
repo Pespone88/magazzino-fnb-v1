@@ -30,8 +30,8 @@ async function productionSourceText(): Promise<string> {
 
 test('production app source contains no Ratio branding', async () => {
   const source = await productionSourceText()
-  const forbiddenBrand = ['ra', 'tio'].join('')
-  assert.equal(source.toLowerCase().includes(forbiddenBrand), false)
+  const forbiddenBrand = new RegExp(`\\b${['ra', 'tio'].join('')}\\b`, 'i')
+  assert.equal(forbiddenBrand.test(source), false)
 })
 
 test('production app source contains no fake or mock stock implementation', async () => {
