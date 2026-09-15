@@ -21,7 +21,20 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Vitest
-        run: npm run test:run
+        id: vitest
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:run -- --reporter=verbose 2>&1 | tee vitest.log
+      - name: Upload Vitest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-diagnostics
+          path: magazzino-fnb-v1/vitest.log
+      - name: Fail if Vitest failed
+        if: steps.vitest.outcome == 'failure'
+        run: exit 1
       - name: Node/bootstrap tests
         run: npm run test:bootstrap
       - name: Lint
