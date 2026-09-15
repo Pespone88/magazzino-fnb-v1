@@ -28,7 +28,8 @@
 - Nessun `DELETE` client sulle tabelle stock.
 - Nessuna UI deve mostrare stock hardcoded o fittizio.
 - I moduli successivi devono usare le primitive private stock, senza introdurre un secondo ledger.
-- Le migration vanno applicate tramite Supabase; se il backend restituisce un prefisso versione canonico diverso da quello pianificato, il file repository va rinominato a quel prefisso prima del commit e non va conservata una copia duplicata.
+- Una migration applicata non viene mai riscritta: schema, core operations, reservations e security sono migration separate.
+- Se Supabase restituisce un prefisso versione canonico diverso da quello pianificato, il file repository viene rinominato a quel prefisso prima del commit e non si conserva una copia duplicata.
 
 ---
 
@@ -39,7 +40,9 @@ Nuovi file:
 - `magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql`
 - `magazzino-fnb-v1/supabase/tests/stock_ledger_acceptance.sql`
 - `magazzino-fnb-v1/supabase/migrations/20260915134500_stock_ledger_schema.sql`
-- `magazzino-fnb-v1/supabase/migrations/20260915135500_stock_ledger_operations.sql`
+- `magazzino-fnb-v1/supabase/migrations/20260915135500_stock_ledger_core_operations.sql`
+- `magazzino-fnb-v1/supabase/migrations/20260915140500_stock_reservations.sql`
+- `magazzino-fnb-v1/supabase/migrations/20260915141500_stock_security.sql`
 - `magazzino-fnb-v1/src/stock/types.ts`
 - `magazzino-fnb-v1/src/stock/validation.ts`
 - `magazzino-fnb-v1/src/stock/validation.node.test.ts`
@@ -81,8 +84,6 @@ File modificati:
 
 - [ ] **Step 1: Scrivere il contract SQL RED**
 
-Il contract deve verificare presenza delle tre tabelle, RLS attiva e assenza dei privilegi client critici:
-
 ```sql
 select to_regclass('public.stock_movements') is not null as has_movements;
 select to_regclass('public.stock_balances') is not null as has_balances;
@@ -102,13 +103,11 @@ select has_table_privilege('authenticated', 'public.stock_balances', 'INSERT,UPD
 select has_table_privilege('authenticated', 'public.stock_reservations', 'INSERT,UPDATE,DELETE') as reservation_write;
 ```
 
-- [ ] **Step 2: Eseguire il contract e confermare RED**
+- [ ] **Step 2: Eseguire contract e confermare RED**
 
-Eseguire sul progetto Supabase corrente. Expected: oggetti stock assenti.
+Expected: oggetti stock assenti.
 
-- [ ] **Step 3: Implementare enum e tabelle**
-
-Enum:
+- [ ] **Step 3: Implementare enum**
 
 ```sql
 create type public.stock_movement_type as enum (
@@ -127,7 +126,7 @@ create type public.stock_reservation_type as enum ('STORE_SUPPLY','INTERSTORE_LO
 create type public.stock_reservation_status as enum ('OPEN','CONSUMED','RELEASED');
 ```
 
-Tabelle:
+- [ ] **Step 4: Implementare tabelle**
 
 ```sql
 create table public.stock_movements (
@@ -203,11 +202,9 @@ create table public.stock_reservations (
 );
 ```
 
-`created_by_name_snapshot` evita di allargare la RLS di `profiles`: il nome visualizzato nello storico è congelato al momento del movimento, mentre `created_by` resta l'identità autorevole.
+`created_by_name_snapshot` mantiene leggibile l'autore senza allargare la RLS di `profiles`; `created_by` resta l'identità autorevole.
 
-- [ ] **Step 4: Indici e lock-down iniziale**
-
-Creare indici:
+- [ ] **Step 5: Indici, RLS e revoke iniziale**
 
 ```sql
 create index stock_movements_store_date_idx on public.stock_movements(store_id, occurred_at desc);
@@ -217,15 +214,11 @@ create index stock_reservations_store_status_idx on public.stock_reservations(st
 create index stock_reservations_article_status_idx on public.stock_reservations(store_article_id, status);
 ```
 
-Abilitare RLS su tutte e tre le tabelle e `revoke all ... from anon, authenticated`.
+Abilitare RLS su tutte e tre; `revoke all ... from anon, authenticated`.
 
-- [ ] **Step 5: Dry-run e applicazione**
+- [ ] **Step 6: Dry-run, apply, contract e commit**
 
-Eseguire `BEGIN; <migration>; ROLLBACK;`, poi applicare via Supabase migration. Se il backend assegna un altro prefisso versione, rinominare il file repository a quel valore prima del commit.
-
-- [ ] **Step 6: Rieseguire contract e commit**
-
-Expected: schema/RLS verdi, write privileges `false`.
+Prima `BEGIN; <migration>; ROLLBACK;`, poi apply migration Supabase, contract verde. Se il backend assegna altro prefisso, rinominare il file prima del commit.
 
 ```bash
 git add magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql magazzino-fnb-v1/supabase/migrations/*stock_ledger_schema.sql
@@ -237,18 +230,18 @@ git commit -m "feat: add stock ledger schema"
 ### Task 2: Primitive atomiche saldo/movimenti + RPC Admin
 
 **Files:**
-- Create: `magazzino-fnb-v1/supabase/migrations/20260915135500_stock_ledger_operations.sql`
+- Create: `magazzino-fnb-v1/supabase/migrations/20260915135500_stock_ledger_core_operations.sql`
 - Modify: `magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql`
 
 **Interfaces:**
 - Consumes: Task 1; `private.current_user_is_admin()`.
-- Produces: `private.ensure_stock_balance`, `private.current_stock_unit_cost`, `private.current_user_stock_name`, `private.post_stock_movement`, `private.reverse_stock_movement`, `public.admin_adjust_stock`, `public.admin_reverse_stock_movement`.
+- Produces: `ensure_stock_balance`, `current_stock_unit_cost`, `current_user_stock_name`, `post_stock_movement`, `reverse_stock_movement`, `admin_adjust_stock`, `admin_reverse_stock_movement`.
 
-- [ ] **Step 1: Estendere contract RED con le routine**
+- [ ] **Step 1: Contract RED routine**
 
-Verificare schema, firme, security mode e grant; `anon` non deve poter eseguire le RPC Admin.
+Verificare schema/firme/security/grant; `anon` non esegue RPC Admin.
 
-- [ ] **Step 2: Implementare `ensure_stock_balance` concorrente-sicuro**
+- [ ] **Step 2: Implementare `private.ensure_stock_balance`**
 
 ```sql
 insert into public.stock_balances (store_article_id, store_id)
@@ -262,19 +255,15 @@ where store_article_id = p_store_article_id
 for update;
 ```
 
-Se la coppia non esiste o appartiene a un altro store: `Invalid store/article relationship`.
+Se la coppia non esiste/coincide: `Invalid store/article relationship`.
 
-- [ ] **Step 3: Implementare nome autore snapshot**
+- [ ] **Step 3: Implementare snapshot autore e costo**
 
-`private.current_user_stock_name()` legge `profiles` per `auth.uid()` e restituisce `first_name || ' ' || last_name` normalizzato; fallback `Utente`. La funzione viene chiamata da `post_stock_movement`, non dal browser.
+`private.current_user_stock_name()` legge il profilo `auth.uid()`, restituisce nome/cognome normalizzati o `Utente`.
 
-- [ ] **Step 4: Implementare costo corrente**
+`private.current_stock_unit_cost(p_store_article_id uuid)` restituisce l'ultimo `purchase_price_history.unit_price_snapshot` con `source='RECEIPT'`, collegato via `store_article_suppliers`, ordinato `recorded_at desc, id desc`; se assente `NULL`.
 
-`private.current_stock_unit_cost(p_store_article_id uuid)` restituisce l'ultimo `purchase_price_history.unit_price_snapshot` con `source='RECEIPT'`, collegato tramite `store_article_suppliers`, ordinato `recorded_at desc, id desc`. Se non esiste: `NULL`.
-
-- [ ] **Step 5: Implementare `private.post_stock_movement`**
-
-Firma:
+- [ ] **Step 4: Implementare `private.post_stock_movement`**
 
 ```sql
 private.post_stock_movement(
@@ -293,18 +282,9 @@ private.post_stock_movement(
 ) returns uuid
 ```
 
-Regole:
-- rifiuta `0`;
-- rifiuta `p_quantity_delta <> round(p_quantity_delta, 3)` prima del cast a `numeric(14,3)`;
-- operation key vuota -> errore;
-- su operation key esistente restituisce lo stesso id solo se store, articolo, tipo, quantità, source e reversal coincidono; altrimenti `Movement operation key conflict`;
-- crea/locka saldo;
-- rifiuta `new_on_hand < 0` (`Stock would become negative`);
-- rifiuta `new_on_hand < reserved` (`Reserved quantity exceeds resulting stock`);
-- inserisce movimento con `created_by=auth.uid()` e `created_by_name_snapshot=private.current_user_stock_name()`;
-- aggiorna saldo nella stessa transazione.
+Regole: zero vietato; `p_quantity_delta <> round(p_quantity_delta,3)` vietato; key vuota vietata; retry identico restituisce id esistente; stessa key con semantica diversa -> `Movement operation key conflict`; lock saldo; `new_on_hand < 0` -> `Stock would become negative`; `new_on_hand < reserved` -> `Reserved quantity exceeds resulting stock`; insert movimento + update saldo nella stessa transazione.
 
-- [ ] **Step 6: Implementare rettifica Admin**
+- [ ] **Step 5: Implementare `public.admin_adjust_stock`**
 
 ```sql
 public.admin_adjust_stock(
@@ -315,13 +295,11 @@ public.admin_adjust_stock(
 ) returns uuid
 ```
 
-Deriva lo store dal `store_article`, richiede Admin, motivo non vuoto, usa `ADMIN_ADJUSTMENT`, `ADMIN`, costo da `current_stock_unit_cost`.
+Deriva store dal `store_article`, richiede Admin e motivo non vuoto, usa `ADMIN_ADJUSTMENT`/`ADMIN`, costo corrente da helper.
 
-- [ ] **Step 7: Implementare reversal Admin**
+- [ ] **Step 6: Implementare reversal completo**
 
-`private.reverse_stock_movement` locka l'originale, rifiuta `REVERSAL`, rifiuta originali già stornati, crea quantità esattamente opposta e copia il costo snapshot. Delega a `post_stock_movement`, quindi uno storno che causerebbe saldo negativo o conflitto con reserved fallisce atomicamente.
-
-RPC:
+`private.reverse_stock_movement`: lock originale; rifiuta `REVERSAL`; rifiuta originale già stornato; quantità esattamente opposta; stesso costo snapshot; `REVERSAL`/`REVERSAL`; delega a `post_stock_movement`.
 
 ```sql
 public.admin_reverse_stock_movement(
@@ -331,45 +309,36 @@ public.admin_reverse_stock_movement(
 ) returns uuid
 ```
 
-Richiede Admin e motivo non vuoto.
+Richiede Admin e motivo.
 
-- [ ] **Step 8: Grant minimi e test DB**
+- [ ] **Step 7: Grant, apply e test DB**
 
-Revocare `PUBLIC/anon`; concedere solo le RPC pubbliche ad `authenticated`. Test in outer transaction:
-- `+10` -> 10;
-- retry identico -> un record;
-- retry stessa key con quantità diversa -> errore;
-- `-3` -> 7;
-- `-8` -> errore e saldo invariato;
-- reversal del `-3` -> 10;
-- secondo reversal -> errore;
-- reversal di reversal -> errore;
-- costo assente resta `NULL`.
+Revocare `PUBLIC/anon`; concedere sole RPC pubbliche ad `authenticated`. Test: +10, retry identico, key conflict, -3, -8 rifiutato, reversal, secondo reversal rifiutato, reversal di reversal rifiutato, costo assente NULL.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql magazzino-fnb-v1/supabase/migrations/*stock_ledger_operations.sql
+git add magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql magazzino-fnb-v1/supabase/migrations/*stock_ledger_core_operations.sql
 git commit -m "feat: add atomic stock movement operations"
 ```
 
 ---
 
-### Task 3: Riserve auditabili e consumo atomico
+### Task 3: Riserve auditabili
 
 **Files:**
-- Modify: `magazzino-fnb-v1/supabase/migrations/20260915135500_stock_ledger_operations.sql`
+- Create: `magazzino-fnb-v1/supabase/migrations/20260915140500_stock_reservations.sql`
 - Modify: `magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql`
 
 **Interfaces:**
 - Consumes: `ensure_stock_balance`, `post_stock_movement`.
-- Produces: `private.open_stock_reservation`, `private.release_stock_reservation`, `private.consume_stock_reservation`; nessuna RPC pubblica generica.
+- Produces: `open_stock_reservation`, `release_stock_reservation`, `consume_stock_reservation`; nessuna RPC browser generica.
 
 - [ ] **Step 1: Contract RED**
 
-Verificare le tre primitive in `private` e verificare che non esistano omonime funzioni pubbliche invocabili dal Data API.
+Verificare le tre primitive in `private` e l'assenza di omonime funzioni pubbliche esposte.
 
-- [ ] **Step 2: Implementare apertura riserva**
+- [ ] **Step 2: Implementare apertura**
 
 ```sql
 private.open_stock_reservation(
@@ -383,11 +352,11 @@ private.open_stock_reservation(
 ) returns uuid
 ```
 
-Rifiuta quantità <=0 o oltre 3 decimali, crea/locka saldo, verifica `available >= p_quantity`, idempotenza operation key con controllo semantico, inserisce `OPEN` e incrementa `reserved` atomicamente.
+Quantità >0, massimo 3 decimali, lock saldo, `available >= quantity`, idempotenza semantica, insert OPEN + incremento reserved atomico.
 
 - [ ] **Step 3: Implementare release**
 
-`private.release_stock_reservation(p_reservation_id uuid)` locka riserva e saldo; solo `OPEN`; imposta `RELEASED`, `closed_at`, `closed_by`, decrementa reserved; `on_hand` invariato. Seconda chiusura -> `Reservation already closed`.
+`release_stock_reservation(id)` locka riserva/saldo; solo OPEN; imposta RELEASED/closed metadata; decrementa reserved; on_hand invariato; seconda chiusura -> `Reservation already closed`.
 
 - [ ] **Step 4: Implementare consume**
 
@@ -402,23 +371,16 @@ private.consume_stock_reservation(
 ) returns uuid
 ```
 
-Lock riserva e saldo, chiude `CONSUMED`, decrementa reserved e crea il movimento negativo della stessa quantità nella medesima transazione. Se il movimento fallisce, anche la chiusura della riserva deve rollbackare.
+Lock, chiude CONSUMED, decrementa reserved e crea movimento negativo stessa quantità nella medesima transazione; qualsiasi errore movimento rollbacka anche la chiusura.
 
-- [ ] **Step 5: Test DB riserve**
+- [ ] **Step 5: Apply/test DB**
 
-Sequenza minima:
-- on_hand 10;
-- open 4 -> reserved 4 / available 6;
-- open 7 -> errore;
-- release -> reserved 0 / on_hand 10;
-- seconda release -> errore;
-- open 3 + consume -> reserved 0 / on_hand 7 / movimento -3;
-- retry apertura identica -> nessun duplicato.
+On_hand 10; open4 -> reserved4/available6; open7 rifiutato; release -> reserved0/on_hand10; seconda release rifiutata; open3+consume -> reserved0/on_hand7/movimento-3; retry apertura identica non duplica.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql magazzino-fnb-v1/supabase/migrations/*stock_ledger_operations.sql
+git add magazzino-fnb-v1/supabase/tests/stock_ledger_contract.sql magazzino-fnb-v1/supabase/migrations/*stock_reservations.sql
 git commit -m "feat: add auditable stock reservations"
 ```
 
@@ -427,18 +389,18 @@ git commit -m "feat: add auditable stock reservations"
 ### Task 4: RLS, immutabilità e acceptance DB
 
 **Files:**
-- Modify: `magazzino-fnb-v1/supabase/migrations/20260915135500_stock_ledger_operations.sql`
+- Create: `magazzino-fnb-v1/supabase/migrations/20260915141500_stock_security.sql`
 - Create: `magazzino-fnb-v1/supabase/tests/stock_ledger_acceptance.sql`
 
 **Interfaces:**
-- Consumes: foundation access helpers + Tasks 1-3.
-- Produces: SELECT store-scoped, ledger immutabile, acceptance degli invarianti DB.
+- Consumes: Tasks 1-3 + foundation access helpers.
+- Produces: read store-scoped, ledger immutabile e acceptance DB.
 
-- [ ] **Step 1: Scrivere acceptance RED in `BEGIN/ROLLBACK`**
+- [ ] **Step 1: Scrivere acceptance RED `BEGIN/ROLLBACK`**
 
-Creare dati temporanei per entrambi gli store e un profilo USER temporaneo; nessun dato test deve persistere.
+Creare dati temporanei entrambi store e profilo USER temporaneo.
 
-- [ ] **Step 2: Grant e policy**
+- [ ] **Step 2: Grant/policy SELECT**
 
 ```sql
 grant select on public.stock_movements to authenticated;
@@ -446,44 +408,34 @@ grant select on public.stock_balances to authenticated;
 grant select on public.stock_reservations to authenticated;
 ```
 
-Policy SELECT su tutte e tre:
+Per tutte:
 
 ```sql
 using (private.current_user_has_store_access(store_id))
 ```
 
-Nessuna policy di scrittura client.
+Nessuna policy write client.
 
-- [ ] **Step 3: Trigger immutabilità ledger**
+- [ ] **Step 3: Trigger immutabilità**
 
-`before update or delete on stock_movements` alza sempre `Stock movements are immutable`. Le correzioni sono solo nuovi movimenti/reversal.
+`before update or delete on stock_movements` -> `Stock movements are immutable`.
 
-- [ ] **Step 4: Acceptance RLS**
+- [ ] **Step 4: Apply e RLS acceptance**
 
-Simulare JWT USER assegnato solo a Eccellenze: deve vedere soltanto movimenti/saldi/riserve Eccellenze. Admin deve vedere entrambi.
+USER Eccellenze vede solo Eccellenze; Admin entrambi. Direct insert/update/delete critici negati; RPC Admin negate a non-Admin; mismatch store/store_article rifiutato.
 
-- [ ] **Step 5: Acceptance invarianti**
+- [ ] **Step 5: Invarianti ricostruzione**
 
-Per ogni store_article test:
-
-```sql
-select coalesce(sum(quantity_delta_base), 0)
-from public.stock_movements
-where store_article_id = v_store_article_id;
-```
-
-Deve coincidere con `on_hand`. La somma delle riserve `OPEN` deve coincidere con `reserved`; `available=on_hand-reserved`.
-
-Testare inoltre mismatch `store_id/store_article_id`, direct writes negate e RPC Admin negate al non-Admin.
+Somma movimenti = on_hand; somma OPEN = reserved; available = differenza. Precisione 0,375 preservata.
 
 - [ ] **Step 6: Advisor indici**
 
-Eseguire Performance Advisor e aggiungere gli indici mancanti per ogni `unindexed_foreign_keys` del modulo stock. Non eliminare indici solo perché `unused` su tabelle nuove.
+Performance Advisor: correggere ogni `unindexed_foreign_keys` introdotta dal modulo. Non rimuovere indici `unused` solo perché le tabelle sono nuove.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add magazzino-fnb-v1/supabase/tests/stock_ledger_acceptance.sql magazzino-fnb-v1/supabase/migrations/*stock_ledger_operations.sql
+git add magazzino-fnb-v1/supabase/tests/stock_ledger_acceptance.sql magazzino-fnb-v1/supabase/migrations/*stock_security.sql
 git commit -m "test: enforce stock ledger security and invariants"
 ```
 
@@ -504,7 +456,7 @@ git commit -m "test: enforce stock ledger security and invariants"
 - Consumes: SELECT RLS stock + RPC Admin.
 - Produces: `StockGateway` isolato dal catalog gateway.
 
-- [ ] **Step 1: Test RED validazione quantità firmata**
+- [ ] **Step 1: Test/implementare quantità firmata**
 
 ```ts
 assert.equal(parseSignedStockQuantity('0,375'), 0.375)
@@ -512,8 +464,6 @@ assert.equal(parseSignedStockQuantity('-0,375'), -0.375)
 assert.equal(parseSignedStockQuantity('1.2345'), null)
 assert.equal(parseSignedStockQuantity('-'), null)
 ```
-
-Implementare:
 
 ```ts
 export function parseSignedStockQuantity(value: string): number | null {
@@ -524,7 +474,7 @@ export function parseSignedStockQuantity(value: string): number | null {
 }
 ```
 
-- [ ] **Step 2: Definire tipi**
+- [ ] **Step 2: Definire tipi esatti**
 
 ```ts
 export type StockMovementType =
@@ -565,6 +515,7 @@ export interface StockMovement {
 
 export interface MovementFilters {
   query?: string
+  storeArticleId?: string
   movementType?: StockMovementType
   fromDate?: string
   toDate?: string
@@ -584,7 +535,7 @@ export interface ReverseMovementInput {
 }
 ```
 
-- [ ] **Step 3: Definire helper saldo zero e gateway**
+- [ ] **Step 3: Definire saldo zero e gateway**
 
 ```ts
 export function zeroStockBalance(storeId: string, storeArticleId: string): StockBalance {
@@ -601,35 +552,29 @@ export interface StockGateway {
 }
 ```
 
-- [ ] **Step 4: Test RED adapter Supabase**
+- [ ] **Step 4: Test RED adapter**
 
-Verificare numeric `'0.375'`, saldo assente -> zero, `NULL` cost preservato, quantità RPC serializzata a 3 decimali e mapping errori funzionali.
+Verificare numeric 0.375, saldo assente zero, cost NULL preservato, RPC quantity serializzata a 3 decimali ed error mapping.
 
-- [ ] **Step 5: Implementare `listBalances/getBalance` senza N+1**
+- [ ] **Step 5: Implementare saldo/costo senza N+1**
 
-Fare due query store-scoped:
-1. `stock_balances` dello store;
-2. `purchase_price_history` dello store con `source='RECEIPT'`, ordinata `recorded_at desc, id desc`, selezionando la relazione `store_article_suppliers(store_article_id)`.
+Due query store-scoped: `stock_balances`; `purchase_price_history` con `source='RECEIPT'`, ordinata data/id desc e relazione `store_article_suppliers(store_article_id)`. Prima riga per store_article = currentUnitCost; currentValue = onHand*cost; assenza = null. `getBalance` senza riga usa `zeroStockBalance`.
 
-Costruire una map del primo prezzo RECEIPT per `store_article_id`. Per ciascun saldo: `currentUnitCost=ultimoReceipt ?? null`; `currentValue = currentUnitCost === null ? null : onHand * currentUnitCost`. `getBalance` senza riga usa `zeroStockBalance` e applica lo stesso lookup costo.
+- [ ] **Step 6: Implementare movimenti/reversed**
 
-- [ ] **Step 6: Implementare movimenti e `reversed`**
+Query movimenti con `store_articles -> articles`; autore da `created_by_name_snapshot`. Seconda query dei REVERSAL costruisce un Set degli originali già stornati. `storeArticleId`, tipo e date filtrati DB; ricerca testo articolo applicata dopo mapping sul set già store-scoped.
 
-Query stock movements store-scoped con relazione `store_articles -> articles`; il nome autore arriva da `created_by_name_snapshot`, non da join a `profiles`. Una seconda query leggera dei `REVERSAL` dello store costruisce `Set<reversal_of_movement_id>` per marcare gli originali già stornati anche se il reversal è fuori dal filtro data corrente.
+- [ ] **Step 7: RPC/error mapping**
 
-Applicare `movementType/fromDate/toDate` sul DB; `query` articolo può essere applicata dopo mapping sul set già store-scoped per evitare filtri PostgREST fragili sulle relazioni.
-
-- [ ] **Step 7: Implementare RPC write/error mapping**
-
-`adjustStock` chiama `admin_adjust_stock`; `reverseMovement` chiama `admin_reverse_stock_movement`. Mappare:
-- `Stock would become negative` -> `L’operazione porterebbe la giacenza sotto zero.`
-- `Reserved quantity exceeds resulting stock` -> `Disponibilità insufficiente.`
-- operation key conflict -> `Movimento già registrato.`
+- negative stock -> `L’operazione porterebbe la giacenza sotto zero.`
+- reserved conflict -> `Disponibilità insufficiente.`
+- operation conflict -> `Movimento già registrato.`
 - already reversed -> `Movimento già stornato.`
-- reversal original/not reversible -> `Movimento non stornabile.`
+- non reversible -> `Movimento non stornabile.`
 - permission -> `Non hai i permessi per operare su questo store.`
+- SQLSTATE `40001` o `40P01` -> `La giacenza è cambiata nel frattempo. Riprova.`
 
-- [ ] **Step 8: Test Node e commit**
+- [ ] **Step 8: Node tests e commit**
 
 ```bash
 node --experimental-strip-types --test src/stock/validation.node.test.ts src/stock/supabaseStockGateway.node.test.ts src/stock/stockAcceptance.node.test.ts
@@ -651,42 +596,28 @@ git commit -m "feat: add stock domain gateway"
 - Create: `magazzino-fnb-v1/src/stock/StockSummary.test.tsx`
 
 **Interfaces:**
-- Consumes: `StockGateway.listBalances`, `getBalance`, `listRecentMovements`.
-- Produces: lista e dettaglio Articoli con stock reale.
+- Consumes: StockGateway.
+- Produces: stock reale lista/dettaglio e callback verso storico completo.
 
-- [ ] **Step 1: Aggiornare test Articoli RED**
+- [ ] **Step 1: Test lista RED**
 
-Il vecchio test anti-giacenza diventa un test di giacenza reale. Con `{onHand:20,reserved:5,available:15}` mostra `Fisico 20 PZ`, `Riservato 5`, `Disponibile 15`; senza saldo mostra zero.
+Saldo 20/5/15 -> `Fisico 20 PZ`, `Riservato 5`, `Disponibile 15`; saldo assente -> zero.
 
-- [ ] **Step 2: Testare `StockSummary` RED**
+- [ ] **Step 2: Test `StockSummary` RED**
 
-Casi:
-- saldo reale;
-- reserved zero senza enfasi;
-- costo null -> `Valore non disponibile`;
-- costo 1.25/onHand 20 -> `€ 25,00`.
+Saldo reale; reserved 0; costo null -> `Valore non disponibile`; costo 1.25/onHand20 -> `€ 25,00`.
 
-- [ ] **Step 3: Caricare saldi in `CatalogWorkspace`**
+- [ ] **Step 3: CatalogWorkspace**
 
-Aggiungere `stockGateway` props e usare:
+Prop `stockGateway` e `onOpenMovementsForArticle(storeArticleId)`. Caricare categories + articles + balances in Promise.all; map saldo per storeArticleId, fallback `zeroStockBalance`.
 
-```ts
-Promise.all([
-  gateway.listCategories(),
-  gateway.listStoreArticles(storeId),
-  stockGateway.listBalances(storeId),
-])
-```
+- [ ] **Step 4: ArticlesScreen**
 
-Costruire `Map<string, StockBalance>`; per articoli senza riga usare `zeroStockBalance(storeId, article.id)`.
+Prop `stockByArticleId`; mostra fisico/riservato/disponibile senza introdurre logica riordino.
 
-- [ ] **Step 4: Integrare lista**
+- [ ] **Step 5: ArticleDetail**
 
-`ArticlesScreen` riceve `stockByArticleId` e mostra fisico/riservato/disponibile accanto a minimo/obiettivo e fornitore. Non calcola suggerimenti d'ordine.
-
-- [ ] **Step 5: Integrare dettaglio**
-
-`ArticleDetail` riceve `stockGateway`, carica saldo e ultimi 5 movimenti, mostra sezione Magazzino. Nessun pulsante generico “nuovo movimento”.
+Riceve `stockGateway` e `onOpenMovements`; mostra `StockSummary`, ultimi 5 movimenti e bottone `Vedi tutti i movimenti` che invoca callback con `article.id`. Nessun “nuovo movimento”.
 
 - [ ] **Step 6: Regression e commit**
 
@@ -712,21 +643,14 @@ git commit -m "feat: show real warehouse stock in catalog"
 - Modify: `magazzino-fnb-v1/src/main.tsx`
 
 **Interfaces:**
-- Consumes: `StockGateway`, `CatalogGateway`, ActorAccess, active store.
-- Produces: Movimenti reale in Altro, storico store-first e sole azioni Admin previste.
+- Consumes: StockGateway, CatalogGateway, ActorAccess, store attivo.
+- Produces: Movimenti reale in Altro; filtro iniziale da dettaglio articolo; azioni Admin previste.
 
 - [ ] **Step 1: Test UI RED**
 
-Verificare:
-- Movimenti cliccabile da Altro;
-- cambio store richiama solo lo store selezionato;
-- filtri articolo/tipo/date sono applicati;
-- non-Admin non vede Rettifica/Storna;
-- Admin vede Rettifica;
-- motivo obbligatorio;
-- reversal e originali già stornati non espongono Storna.
+Movimenti cliccabile; cambio store ricarica store; filtri articolo/tipo/date; non-Admin senza Rettifica/Storna; Admin con Rettifica; motivo obbligatorio; reversal/originale già stornato senza Storna; apertura da ArticleDetail prefiltra `storeArticleId`.
 
-- [ ] **Step 2: Implementare props e caricamento**
+- [ ] **Step 2: Implementare props**
 
 ```ts
 type StockMovementsScreenProps = {
@@ -734,38 +658,40 @@ type StockMovementsScreenProps = {
   storeId: string
   gateway: StockGateway
   catalogGateway: CatalogGateway
+  initialStoreArticleId?: string
 }
 ```
 
-Caricare `gateway.listMovements(storeId, filters)` e `catalogGateway.listStoreArticles(storeId)` per popolare il form Admin senza duplicare il catalogo dentro StockGateway.
+Caricare movimenti e `catalogGateway.listStoreArticles(storeId)` per selezione rettifica.
 
-- [ ] **Step 3: Implementare lista/filtri**
+- [ ] **Step 3: Lista/filtri**
 
-UI mostra articolo, tipo, data, quantità con segno/unità, `createdByName`, origine, costo/valore se noti e stato storno. Filtri: ricerca articolo, tipo, data da/a.
+Mostra articolo, tipo, data, quantità con segno/unità, autore snapshot, origine, costo/valore se noti, stato storno. Filtri: ricerca, articolo iniziale/esatto, tipo, date.
 
-- [ ] **Step 4: Implementare rettifica Admin con idempotenza UI**
+- [ ] **Step 4: Rettifica Admin idempotente**
 
-Form separato: articolo store, quantità delta firmata (`parseSignedStockQuantity`, diversa da zero), motivo obbligatorio. Usare `useRef<string | null>` per operation key: generarne una con `crypto.randomUUID()` al primo submit, mantenerla se la stessa richiesta fallisce e viene ritentata; azzerarla al successo o quando l'utente modifica articolo/quantità/motivo.
+Form separato: articolo, quantità firmata non zero, motivo. `useRef<string|null>` per operation key: genera UUID al primo submit, conserva su retry identico, azzera al successo o quando cambiano articolo/quantità/motivo.
 
-- [ ] **Step 5: Implementare storno Admin**
+- [ ] **Step 5: Storno Admin**
 
-Conferma con motivo e operation key propria; chiamare `reverseMovement`, poi ricaricare elenco. Non mostrare azione per `REVERSAL` o `reversed=true`.
+Motivo + operation key propria; `reverseMovement`, refresh; azione solo se non REVERSAL e `reversed=false`.
 
-- [ ] **Step 6: Wiring applicazione**
+- [ ] **Step 6: Wiring AppShell**
 
-`App.tsx` crea `createSupabaseStockGateway`. `AppShell` riceve `stockGateway`; `MoreTarget` include `movements`; `MoreScreen` sostituisce la card Movimenti disabilitata con bottone reale. Passare sia `stockGateway` sia `catalogGateway` a `StockMovementsScreen` e `stockGateway` a `CatalogWorkspace`.
+`App.tsx` crea `stockGateway`. `AppShell` riceve stockGateway, `MoreTarget` include movements e mantiene `movementArticleFilter: string | undefined`. `onOpenMovementsForArticle` passa da AppShell -> CatalogWorkspace -> ArticleDetail; imposta sezione `more`, target `movements`, filtro articolo. Aprendo Movimenti dal menu il filtro viene azzerato. Cambio store azzera filtro.
 
-- [ ] **Step 7: CSS/import**
-
-Creare `stock.css`, importarlo da `main.tsx`, mantenendo palette/layout esistenti e mobile-first.
-
-- [ ] **Step 8: Full task verification e commit**
+- [ ] **Step 7: CSS/import e full task verify**
 
 ```bash
 npm run test:run
 npm run test:bootstrap
 npm run lint
 npm run build
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
 git add magazzino-fnb-v1/src/App.tsx magazzino-fnb-v1/src/app magazzino-fnb-v1/src/catalog magazzino-fnb-v1/src/stock magazzino-fnb-v1/src/main.tsx
 git commit -m "feat: add stock movements workspace"
 ```
@@ -783,44 +709,23 @@ git commit -m "feat: add stock movements workspace"
 - Consumes: Tasks 1-7.
 - Produces: evidenza fresca di completamento e branch pronto per finishing workflow.
 
-- [ ] **Step 1: Acceptance Node anti-regressione**
+- [ ] **Step 1: Acceptance Node**
 
-Verificare quantità `0,375`, saldo zero, formula available, costo null, nessuno stock hardcoded nei source production `src/stock`, `src/catalog`, `src/app`, nessun branding `RATIO`.
+Verificare 0,375; saldo zero; formula available; costo null; nessuno stock hardcoded production in `src/stock`, `src/catalog`, `src/app`; nessun branding `RATIO`.
 
 - [ ] **Step 2: Acceptance DB completa con rollback**
 
-Verificare esplicitamente gli invarianti spec:
-1. on_hand = somma movimenti;
-2. reserved = somma OPEN;
-3. available corretto;
-4. niente saldo negativo;
-5. niente reserved > on_hand;
-6. idempotenza;
-7. ledger non aggiornabile/cancellabile;
-8. saldo non scrivibile client;
-9. RLS cross-store;
-10. Admin entrambi;
-11. precisione 0,375;
-12-15. reversal record separato, una volta, non reversibile, non negativo;
-16. riserva chiudibile una volta;
-17. release non cambia on_hand;
-18. consume+movimento atomici;
-20. costo storico immutabile;
-21. costo assente null;
-22. UI anti-hardcode via Node test;
-23. niente direct writes tabelle critiche;
-24. saldo assente -> zero via adapter;
-25. mismatch store/store_article rifiutato.
+Verificare gli invarianti 1-18 e 20-25 della spec: somme ledger/saldo, riserve, non-negatività, idempotenza, immutabilità, RLS, precisione, reversal, release/consume, costo storico/null, direct writes negate, saldo zero, store mismatch.
 
-Per il punto 19, predisposizione inter-store: eseguire in una singola transazione di acceptance due `private.post_stock_movement` su store diversi, poi forzare un'eccezione prima del commit e verificare dopo rollback che nessuna gamba persista. Non esporre ancora una RPC prestito.
+Per l'invariante 19 inter-store: nella stessa transazione chiamare due volte `private.post_stock_movement` su store diversi, forzare un'eccezione prima del commit e verificare dopo rollback che nessuna gamba persista. Non esporre ancora RPC prestito.
 
 - [ ] **Step 3: Security/Performance Advisor**
 
-Nessun nuovo finding security stock; nessuna FK stock non indicizzata. Il warning Auth leaked-password protection già preesistente può restare separato dal modulo.
+Nessun nuovo finding security stock; nessuna FK stock non indicizzata. Il warning Auth leaked-password protection preesistente resta separato.
 
 - [ ] **Step 4: README**
 
-Documentare ledger immutabile, `on_hand/reserved/available`, rettifica/storno Admin, RLS, valore solo con costo RECEIPT disponibile e dipendenza futura dei moduli operativi dalle primitive stock.
+Documentare ledger immutabile, on_hand/reserved/available, rettifica/storno Admin, RLS, valore solo con costo RECEIPT disponibile e dipendenza dei moduli futuri dalle primitive stock.
 
 - [ ] **Step 5: Full verification**
 
@@ -832,11 +737,9 @@ npm run lint
 npm run build
 ```
 
-Expected: tutto verde.
+- [ ] **Step 6: Cloudflare + diff review**
 
-- [ ] **Step 6: Cloudflare e review diff**
-
-Controllare GitHub build e `Workers Builds: magazzino-fnb-v1` sul commit finale. Review `main...branch`: nessuna modifica estranea, workflow temporaneo, dato test, segreto o service-role key.
+GitHub build e `Workers Builds: magazzino-fnb-v1` devono essere `success`. Review `main...branch`: nessuna modifica estranea, workflow temporaneo, dato test, segreto o service-role key.
 
 - [ ] **Step 7: Commit finale**
 
