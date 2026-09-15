@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuthContext } from '../auth/authContext'
@@ -37,7 +37,7 @@ describe('AppShell', () => {
     expect(mobileNav).toHaveTextContent('Ordini')
     expect(mobileNav).toHaveTextContent('Altro')
 
-    await user.click(screen.getByRole('button', { name: 'Altro' }))
+    await user.click(within(mobileNav).getByRole('button', { name: 'Altro' }))
     await user.click(screen.getByRole('button', { name: /Movimenti/i }))
     expect(screen.getByRole('heading', { name: 'Movimenti' })).toBeInTheDocument()
     expect(stockGateway.listMovements).toHaveBeenCalledWith('store-eccellenze', expect.any(Object))
