@@ -1,20 +1,28 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AuthContext } from '../auth/authContext'
+import type { CatalogGateway } from '../catalog/catalogGateway'
 import { canSelectStore, visibleStoreIds } from '../domain/access'
 import type { StoreId } from '../domain/store'
+import { MoreScreen } from './MoreScreen'
 import { primaryNavigation, type NavigationKey } from './navigation'
 
 const sectionCopy: Record<NavigationKey, { title: string; description: string }> = {
-  home: { title: 'Da fare', description: 'Attività operative, urgenze e pratiche aperte.' },
-  articles: { title: 'Articoli', description: 'Catalogo, scorte minime, fornitori e storico delle referenze.' },
-  orders: { title: 'Ordini', description: 'Fabbisogni, ordini ai fornitori e ricezioni della merce.' },
-  movements: { title: 'Movimenti', description: 'Rifornimenti al punto vendita, resi e prestiti inter-store.' },
-  inventories: { title: 'Inventari', description: 'Inventario di apertura, mensile e conteggi straordinari.' },
-  more: { title: 'Altro', description: 'Fornitori, anomalie, non conformità, storico e configurazioni.' },
+  home: { title: 'Da fare', description: 'Attività operative e moduli disponibili nello store selezionato.' },
+  articles: { title: 'Articoli', description: 'Catalogo dello store, soglie operative e fornitori associati.' },
+  orders: { title: 'Ordini', description: 'Il flusso ordini sarà attivato dopo catalogo, ricezioni e movimenti.' },
+  more: { title: 'Altro', description: 'Fornitori, notifiche e accesso ai prossimi moduli operativi.' },
 }
+
+export type CatalogScreenState =
+  | { kind: 'list' }
+  | { kind: 'create' }
+  | { kind: 'detail'; storeArticleId: string }
+
+type MoreTarget = 'menu' | 'suppliers' | 'notifications'
 
 type AppShellProps = {
   context: AuthContext
+  gateway: CatalogGateway
   onSignOut(): Promise<void>
 }
 
@@ -23,7 +31,8 @@ function displayName(context: AuthContext): string {
   return name || 'Utente'
 }
 
-export function AppShell({ context, onSignOut }: AppShellProps) {
+export function AppShell({ context, gateway, onSignOut }: AppShellProps) {
+  void gateway
   const allowedStoreIds = useMemo(
     () => visibleStoreIds(context.actor, context.stores.map((store) => store.id)),
     [context.actor, context.stores],
@@ -34,8 +43,11 @@ export function AppShell({ context, onSignOut }: AppShellProps) {
   )
   const [activeStoreId, setActiveStoreId] = useState<StoreId>(allowedStores[0]?.id ?? '')
   const [activeSection, setActiveSection] = useState<NavigationKey>('home')
+  const [catalogScreen, setCatalogScreen] = useState<CatalogScreenState>({ kind: 'list' })
+  const [moreTarget, setMoreTarget] = useState<MoreTarget>('menu')
   const activeCopy = sectionCopy[activeSection]
   const activeStore = allowedStores.find((store) => store.id === activeStoreId)
+  const isAdmin = context.actor.globalRole === 'ADMIN'
 
   useEffect(() => {
     if (!allowedStores.some((store) => store.id === activeStoreId)) {
@@ -43,12 +55,81 @@ export function AppShell({ context, onSignOut }: AppShellProps) {
     }
   }, [activeStoreId, allowedStores])
 
+  const changeStore = (storeId: StoreId) => {
+    setActiveStoreId(storeId)
+    setCatalogScreen({ kind: 'list' })
+    setMoreTarget('menu')
+  }
+
+  const openSection = (section: NavigationKey) => {
+    setActiveSection(section)
+    if (section !== 'articles') setCatalogScreen({ kind: 'list' })
+    if (section !== 'more') setMoreTarget('menu')
+  }
+
+  const openNewArticle = () => {
+    if (!isAdmin) return
+    setActiveSection('articles')
+    setCatalogScreen({ kind: 'create' })
+    setMoreTarget('menu')
+  }
+
   const activeMembership = context.actor.memberships.find(
     (membership) => membership.storeId === activeStoreId,
   )
-  const roleLabel = context.actor.globalRole === 'ADMIN'
-    ? 'Admin'
-    : (activeMembership?.role ?? 'Utente')
+  const roleLabel = isAdmin ? 'Admin' : (activeMembership?.role ?? 'Utente')
+
+  const content = (() => {
+    if (activeSection === 'articles' && catalogScreen.kind === 'create') {
+      return (
+        <section className="content-panel">
+          <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
+          <h1>Nuovo articolo</h1>
+          <p>Il form guidato viene aperto nello store attivo. I dati centrali saranno riutilizzati quando l’articolo esiste già.</p>
+        </section>
+      )
+    }
+
+    if (activeSection === 'more' && moreTarget === 'menu') {
+      return (
+        <section className="content-panel">
+          <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
+          <h1>{activeCopy.title}</h1>
+          <p>{activeCopy.description}</p>
+          <MoreScreen
+            onOpenNotifications={() => setMoreTarget('notifications')}
+            onOpenSuppliers={() => setMoreTarget('suppliers')}
+          />
+        </section>
+      )
+    }
+
+    if (activeSection === 'more' && moreTarget !== 'menu') {
+      const title = moreTarget === 'suppliers' ? 'Fornitori' : 'Notifiche'
+      return (
+        <section className="content-panel">
+          <button className="text-button" onClick={() => setMoreTarget('menu')} type="button">← Altro</button>
+          <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
+          <h1>{title}</h1>
+          <p>Il modulo usa esclusivamente i dati autorizzati dello store selezionato.</p>
+        </section>
+      )
+    }
+
+    return (
+      <section className="content-panel">
+        <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
+        <h1>{activeCopy.title}</h1>
+        <p>{activeCopy.description}</p>
+        {activeSection === 'home' && (
+          <div className="foundation-card">
+            <strong>Accesso protetto</strong>
+            <p>Profilo, ruolo e store vengono caricati da Supabase e filtrati dalle policy RLS del database.</p>
+          </div>
+        )}
+      </section>
+    )
+  })()
 
   return (
     <div className="app-shell">
@@ -62,12 +143,15 @@ export function AppShell({ context, onSignOut }: AppShellProps) {
             <button
               className={item.key === activeSection ? 'nav-button active' : 'nav-button'}
               key={item.key}
-              onClick={() => setActiveSection(item.key)}
+              onClick={() => openSection(item.key)}
               type="button"
             >
               {item.label}
             </button>
           ))}
+          <button className="desktop-create-button" disabled={!isAdmin} onClick={openNewArticle} type="button">
+            + Nuovo articolo
+          </button>
         </nav>
       </aside>
 
@@ -79,7 +163,7 @@ export function AppShell({ context, onSignOut }: AppShellProps) {
               <select
                 aria-label="Store attivo"
                 className="store-select"
-                onChange={(event) => setActiveStoreId(event.target.value)}
+                onChange={(event) => changeStore(event.target.value)}
                 value={activeStoreId}
               >
                 {allowedStores.map((store) => (
@@ -99,24 +183,36 @@ export function AppShell({ context, onSignOut }: AppShellProps) {
           </div>
         </header>
 
-        <section className="content-panel">
-          <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
-          <h1>{activeCopy.title}</h1>
-          <p>{activeCopy.description}</p>
-          <div className="foundation-card">
-            <strong>Accesso protetto</strong>
-            <p>Profilo, ruolo e store vengono caricati da Supabase e filtrati dalle policy RLS del database.</p>
-          </div>
-        </section>
+        {content}
       </main>
 
       <nav className="mobile-bottom-nav" aria-label="Navigazione mobile">
-        {primaryNavigation.map((item) => (
+        {primaryNavigation.slice(0, 2).map((item) => (
           <button
             aria-current={item.key === activeSection ? 'page' : undefined}
             className={item.key === activeSection ? 'mobile-nav-button active' : 'mobile-nav-button'}
             key={item.key}
-            onClick={() => setActiveSection(item.key)}
+            onClick={() => openSection(item.key)}
+            type="button"
+          >
+            {item.shortLabel}
+          </button>
+        ))}
+        <button
+          aria-label="Nuovo articolo"
+          className="mobile-create-button"
+          disabled={!isAdmin}
+          onClick={openNewArticle}
+          type="button"
+        >
+          +
+        </button>
+        {primaryNavigation.slice(2).map((item) => (
+          <button
+            aria-current={item.key === activeSection ? 'page' : undefined}
+            className={item.key === activeSection ? 'mobile-nav-button active' : 'mobile-nav-button'}
+            key={item.key}
+            onClick={() => openSection(item.key)}
             type="button"
           >
             {item.shortLabel}
