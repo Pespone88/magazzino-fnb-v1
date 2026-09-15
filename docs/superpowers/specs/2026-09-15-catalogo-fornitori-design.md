@@ -164,7 +164,9 @@ Campi concettuali:
 Regole:
 - nessun aggiornamento retroattivo;
 - la quantità confezione e l’unità vengono salvate come snapshot;
-- i valori storici non devono cambiare se viene modificata successivamente la confezione standard dell’articolo.
+- i valori storici non devono cambiare se viene modificata successivamente la confezione standard dell’articolo;
+- nella prima implementazione una modifica manuale del prezzo corrente genera automaticamente una nuova riga di storico;
+- quando verrà implementata la ricezione merce, userà lo stesso meccanismo con source dedicata alla ricezione.
 
 ## Creazione articolo
 
@@ -229,6 +231,8 @@ Esempio:
 
 L’arrotondamento deve privilegiare il raggiungimento o superamento dell’obiettivo, non il semplice raggiungimento del minimo.
 
+Il calcolo del suggerimento d’ordine non fa parte di questa prima implementazione perché dipende dalla giacenza derivata dal ledger movimenti.
+
 ## Prezzi
 
 Il prezzo inserito è sempre il prezzo della confezione commerciale, IVA inclusa.
@@ -242,15 +246,17 @@ Esempio:
 
 ## Variazioni prezzo
 
-Quando una ricezione futura rileverà un prezzo diverso:
+Nella prima implementazione, quando un utente autorizzato modifica manualmente il prezzo corrente:
 
 1. il nuovo prezzo viene salvato nello storico;
-2. diventa automaticamente il prezzo corrente;
+2. diventa il prezzo corrente;
 3. il prezzo precedente resta disponibile nello storico;
 4. viene calcolata la variazione assoluta;
 5. viene calcolata la variazione percentuale;
 6. viene generata una notifica Admin per qualsiasi variazione;
 7. variazioni superiori a ±5% vengono marcate come significative.
+
+Quando verrà implementata la ricezione merce, un prezzo diverso rilevato in ricezione seguirà automaticamente lo stesso flusso.
 
 La soglia del 5% riguarda l’evidenza della notifica, non la decisione di registrare o notificare la variazione.
 
@@ -360,20 +366,25 @@ Da Altro:
 
 Su desktop la stessa struttura può diventare una sidebar.
 
+Le voci relative a moduli non ancora implementati possono essere mostrate come non disponibili oppure introdotte solo quando il relativo modulo esiste; non devono simulare funzionalità operative inesistenti.
+
 ### Lista articoli
 
-Mostra:
+Nella prima implementazione mostra:
 - ricerca;
-- filtri;
-- stato sotto minimo;
-- preferiti;
-- giacenza;
-- minimo/obiettivo.
+- filtri anagrafici;
+- categoria;
+- unità;
+- minimo/obiettivo;
+- fornitore preferito e prezzo quando presenti;
+- stato attivo/disattivo.
+
+La giacenza e lo stato sotto minimo verranno aggiunti quando sarà disponibile il ledger movimenti.
 
 ### Dettaglio articolo
 
-Mostra:
-- giacenza corrente;
+Nella prima implementazione mostra:
+- dati anagrafici;
 - minimo;
 - obiettivo;
 - fornitore preferito;
@@ -381,7 +392,9 @@ Mostra:
 - prezzo corrente;
 - costo unitario;
 - storico prezzi;
-- accesso ai futuri movimenti.
+- associazioni agli store.
+
+La giacenza corrente e i movimenti verranno integrati nel modulo magazzino successivo.
 
 ### Nuovo articolo
 
@@ -415,13 +428,14 @@ Il modulo è considerato completo solo se passano almeno questi casi:
 8. Un solo fornitore può essere preferito per articolo/store.
 9. Un articolo può esistere senza fornitore.
 10. Un fornitore centrale può essere associato a entrambi gli store.
-11. Cambio prezzo crea una nuova riga nello storico.
-12. Cambio prezzo aggiorna il prezzo corrente.
+11. Cambio manuale del prezzo crea una nuova riga nello storico.
+12. Cambio manuale del prezzo aggiorna il prezzo corrente.
 13. Qualsiasi cambio prezzo genera notifica Admin.
 14. Variazione oltre ±5% viene marcata significativa.
 15. Modifica package_quantity non altera record storici.
-16. Articolo disattivato resta leggibile nei documenti storici.
+16. Articolo disattivato resta leggibile nei record storici.
 17. RLS impedisce accessi cross-store non autorizzati anche con chiamate API dirette.
+18. Nessuna schermata della prima fase presenta una giacenza inventata in assenza del ledger movimenti.
 
 ## Scope prima implementazione
 
@@ -436,12 +450,14 @@ Incluso:
 - fornitore preferito;
 - prezzo confezione corrente;
 - costo unitario calcolato;
-- storico prezzi;
+- storico prezzi su modifiche manuali;
 - notifiche variazione prezzo;
 - schermate mobile-first relative a questi dati;
 - RLS e test.
 
 Escluso da questo blocco:
+- giacenza derivata;
+- stato sotto minimo calcolato dalla giacenza;
 - generazione automatica ordini;
 - invio ordini;
 - ricezioni;
@@ -468,7 +484,8 @@ Questi moduli useranno il sottosistema qui definito come base dati e di autorizz
 - Minimo + obiettivo per articolo/store.
 - Prezzo inserito per confezione, IVA inclusa.
 - Storico prezzi automatico.
-- Nuovo prezzo ricevuto diventa automaticamente prezzo corrente.
+- Nuovo prezzo inserito diventa automaticamente prezzo corrente.
+- In futuro, il prezzo ricevuto in ricezione userà lo stesso flusso.
 - Notifica Admin per ogni variazione prezzo.
 - Evidenza significativa oltre ±5%.
 - Un solo fornitore preferito per articolo/store.
