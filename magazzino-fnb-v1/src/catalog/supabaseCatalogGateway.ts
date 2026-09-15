@@ -4,6 +4,7 @@ import type {
   AssociateSupplierInput,
   CatalogGateway,
   CreateStoreArticleInput,
+  CreateSupplierForStoreInput,
   CreateSupplierInput,
   LinkArticleSupplierInput,
   PriceNotification,
@@ -380,6 +381,19 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
       const row = asRow(data)
       if (!row) throw new Error('Fornitore non restituito dal database')
       return mapSupplierRow(row)
+    },
+
+    async createSupplierForStore(input: CreateSupplierForStoreInput) {
+      const { data, error } = await client.rpc('admin_create_supplier_for_store', {
+        p_store_id: input.storeId,
+        p_name: input.name.trim(),
+        p_vat_number: input.vatNumber?.trim() || null,
+        p_customer_code: input.customerCode?.trim() || null,
+        p_minimum_order_amount: input.minimumOrderAmount ?? null,
+        p_delivery_notes: input.deliveryNotes?.trim() || null,
+      })
+      throwCatalogError(error)
+      return stringFromDb(data, 'admin_create_supplier_for_store')
     },
 
     async associateSupplierToStore(input: AssociateSupplierInput) {
