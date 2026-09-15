@@ -6,6 +6,7 @@ import { canManageCatalog } from './permissions'
 import type { ArticleDetail as ArticleDetailModel, BaseUnit, Category } from './types'
 import { BASE_UNITS, parseQuantity, validateThresholds } from './validation'
 import { ArticleStoreAssociationForm } from './ArticleStoreAssociationForm'
+import { ArticleSuppliersPanel } from './ArticleSuppliersPanel'
 
 type ArticleDetailProps = {
   actor: ActorAccess
@@ -52,7 +53,7 @@ export function ArticleDetail({ actor, article, categories, stores, gateway, onB
     }
     const thresholdErrors = validateThresholds(minValue, targetValue)
     if (thresholdErrors.length) {
-      setError(thresholdErrors[0])
+      setError(thresholdErrors[0] ?? 'Soglie non valide')
       return
     }
 
@@ -159,6 +160,8 @@ export function ArticleDetail({ actor, article, categories, stores, gateway, onB
           targetStoreName={otherStore.name}
         />
       )}
+
+      <ArticleSuppliersPanel article={article} canManage={canManage} gateway={gateway} onChanged={onChanged} />
     </section>
   )
 }
