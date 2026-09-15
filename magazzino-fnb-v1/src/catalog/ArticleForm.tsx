@@ -11,6 +11,10 @@ type ArticleFormProps = {
   onCancel(): void
 }
 
+type ParsedValues =
+  | { ok: false; error: string }
+  | { ok: true; packageValue: number; minValue: number; targetValue: number }
+
 export function ArticleForm({ storeId, categories: initialCategories, gateway, onCreated, onCancel }: ArticleFormProps) {
   const [categories, setCategories] = useState(initialCategories)
   const [name, setName] = useState('')
@@ -25,22 +29,22 @@ export function ArticleForm({ storeId, categories: initialCategories, gateway, o
   const [candidates, setCandidates] = useState<ArticleCandidate[]>([])
   const [newCategory, setNewCategory] = useState('')
 
-  const parsedValues = () => {
+  const parsedValues = (): ParsedValues => {
     const packageValue = parseQuantity(packageQuantity)
     const minValue = parseQuantity(minStock)
     const targetValue = parseQuantity(targetStock)
-    if (!name.trim()) return { error: 'Inserisci il nome articolo' } as const
-    if (!categoryId) return { error: 'Seleziona una categoria' } as const
-    if (packageValue === null || packageValue <= 0) return { error: 'La quantità per confezione deve essere maggiore di zero' } as const
-    if (minValue === null || targetValue === null) return { error: 'Inserisci quantità valide con massimo 3 decimali' } as const
+    if (!name.trim()) return { ok: false, error: 'Inserisci il nome articolo' }
+    if (!categoryId) return { ok: false, error: 'Seleziona una categoria' }
+    if (packageValue === null || packageValue <= 0) return { ok: false, error: 'La quantità per confezione deve essere maggiore di zero' }
+    if (minValue === null || targetValue === null) return { ok: false, error: 'Inserisci quantità valide con massimo 3 decimali' }
     const thresholdErrors = validateThresholds(minValue, targetValue)
-    if (thresholdErrors.length) return { error: thresholdErrors[0] ?? 'Soglie non valide' } as const
-    return { packageValue, minValue, targetValue } as const
+    if (thresholdErrors.length) return { ok: false, error: thresholdErrors[0] ?? 'Soglie non valide' }
+    return { ok: true, packageValue, minValue, targetValue }
   }
 
   const createNew = async () => {
     const parsed = parsedValues()
-    if ('error' in parsed) {
+    if (!parsed.ok) {
       setError(parsed.error)
       return
     }
@@ -68,7 +72,7 @@ export function ArticleForm({ storeId, categories: initialCategories, gateway, o
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     const parsed = parsedValues()
-    if ('error' in parsed) {
+    if (!parsed.ok) {
       setError(parsed.error)
       return
     }
@@ -100,7 +104,7 @@ export function ArticleForm({ storeId, categories: initialCategories, gateway, o
 
   const useExisting = async (candidate: ArticleCandidate) => {
     const parsed = parsedValues()
-    if ('error' in parsed) {
+    if (!parsed.ok) {
       setError(parsed.error)
       return
     }
