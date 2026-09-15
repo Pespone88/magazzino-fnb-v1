@@ -23,7 +23,9 @@ const article: ArticleDetailModel = {
   suppliers: [],
 }
 
-const gateway = {} as CatalogGateway
+const gateway = {
+  listStoreSuppliers: vi.fn().mockResolvedValue([]),
+} as unknown as CatalogGateway
 const stores = [
   { id: 'store-eccellenze', name: 'Eccellenze della Costiera' },
   { id: 'store-nonna-titti', name: 'Nonna Titti' },
