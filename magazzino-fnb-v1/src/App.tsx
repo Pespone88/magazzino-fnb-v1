@@ -3,27 +3,23 @@ import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { LoginScreen } from './auth/LoginScreen'
 import { createSupabaseCatalogGateway } from './catalog/supabaseCatalogGateway'
 import { supabase } from './lib/supabaseClient'
+import { createSupabaseStockGateway } from './stock/supabaseStockGateway'
 
 const catalogGateway = createSupabaseCatalogGateway(
   supabase as unknown as Parameters<typeof createSupabaseCatalogGateway>[0],
+)
+const stockGateway = createSupabaseStockGateway(
+  supabase as unknown as Parameters<typeof createSupabaseStockGateway>[0],
 )
 
 function AuthenticatedApplication() {
   const { state, signOut, reload } = useAuth()
 
   if (state.status === 'loading') {
-    return (
-      <main className="auth-page">
-        <section className="auth-card compact-card" aria-live="polite">
-          <strong>Caricamento accesso…</strong>
-        </section>
-      </main>
-    )
+    return <main className="auth-page"><section className="auth-card compact-card" aria-live="polite"><strong>Caricamento accesso…</strong></section></main>
   }
 
-  if (state.status === 'signedOut') {
-    return <LoginScreen />
-  }
+  if (state.status === 'signedOut') return <LoginScreen />
 
   if (state.status === 'error') {
     return (
@@ -41,13 +37,9 @@ function AuthenticatedApplication() {
     )
   }
 
-  return <AppShell context={state.context} gateway={catalogGateway} onSignOut={signOut} />
+  return <AppShell context={state.context} gateway={catalogGateway} stockGateway={stockGateway} onSignOut={signOut} />
 }
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <AuthenticatedApplication />
-    </AuthProvider>
-  )
+  return <AuthProvider><AuthenticatedApplication /></AuthProvider>
 }
