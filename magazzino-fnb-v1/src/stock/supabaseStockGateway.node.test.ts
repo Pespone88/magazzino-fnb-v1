@@ -58,6 +58,44 @@ test('adjustStock serializes signed quantity to max 3 decimals', async () => {
   })
 })
 
+test('movement date filters use local-day boundaries instead of UTC midnight', async () => {
+  const previousTz = process.env.TZ
+  process.env.TZ = 'Europe/Rome'
+  const bounds: Record<string, string> = {}
+
+  const makeChain = () => {
+    const result = { data: [], error: null }
+    const chain = {
+      select() { return chain },
+      eq() { return chain },
+      gte(column: string, value: unknown) { if (column === 'occurred_at') bounds.from = String(value); return chain },
+      lte(column: string, value: unknown) { if (column === 'occurred_at') bounds.to = String(value); return chain },
+      order() { return chain },
+      limit() { return chain },
+      maybeSingle() { return Promise.resolve(result) },
+      then<TResult1 = typeof result, TResult2 = never>(
+        onfulfilled?: ((value: typeof result) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+      ) { return Promise.resolve(result).then(onfulfilled, onrejected) },
+    }
+    return chain
+  }
+
+  try {
+    const client = {
+      from() { return { select() { return makeChain() } } },
+      async rpc() { return { data: null, error: null } },
+    }
+    const gateway = createSupabaseStockGateway(client)
+    await gateway.listMovements('store-1', { fromDate: '2026-09-15', toDate: '2026-09-15' })
+
+    assert.equal(bounds.from, new Date(2026, 8, 15, 0, 0, 0, 0).toISOString())
+    assert.equal(bounds.to, new Date(2026, 8, 15, 23, 59, 59, 999).toISOString())
+  } finally {
+    process.env.TZ = previousTz
+  }
+})
+
 test('maps stock and concurrency errors to functional messages', () => {
   assert.equal(mapStockError({ message: 'Stock would become negative' }).message, 'L’operazione porterebbe la giacenza sotto zero.')
   assert.equal(mapStockError({ message: 'Reserved quantity exceeds resulting stock' }).message, 'Disponibilità insufficiente.')
