@@ -39,3 +39,31 @@ select to_regprocedure('private.consume_stock_reservation(uuid,public.stock_move
 select to_regprocedure('public.open_stock_reservation(uuid,uuid,numeric,public.stock_reservation_type,uuid,uuid,text)') is null as no_public_open_reservation;
 select to_regprocedure('public.release_stock_reservation(uuid)') is null as no_public_release_reservation;
 select to_regprocedure('public.consume_stock_reservation(uuid,public.stock_movement_type,numeric,public.stock_source_type,text,text)') is null as no_public_consume_reservation;
+
+-- Mutating stock primitives are implementation details and must never be callable
+-- directly by an authenticated client. Public business RPCs are the only entry point.
+do $$
+begin
+  if has_function_privilege('authenticated', 'private.ensure_stock_balance(uuid,uuid)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.ensure_stock_balance';
+  end if;
+  if has_function_privilege('authenticated', 'private.current_stock_unit_cost(uuid)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.current_stock_unit_cost';
+  end if;
+  if has_function_privilege('authenticated', 'private.post_stock_movement(uuid,uuid,public.stock_movement_type,numeric,numeric,public.stock_source_type,uuid,uuid,uuid,text,text,timestamptz)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.post_stock_movement';
+  end if;
+  if has_function_privilege('authenticated', 'private.reverse_stock_movement(uuid,text,text)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.reverse_stock_movement';
+  end if;
+  if has_function_privilege('authenticated', 'private.open_stock_reservation(uuid,uuid,numeric,public.stock_reservation_type,uuid,uuid,text)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.open_stock_reservation';
+  end if;
+  if has_function_privilege('authenticated', 'private.release_stock_reservation(uuid)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.release_stock_reservation';
+  end if;
+  if has_function_privilege('authenticated', 'private.consume_stock_reservation(uuid,public.stock_movement_type,numeric,public.stock_source_type,text,text)', 'EXECUTE') then
+    raise exception 'authenticated can execute private.consume_stock_reservation';
+  end if;
+end;
+$$;
