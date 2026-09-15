@@ -78,6 +78,40 @@ test('createStoreArticle sends normalized decimal strings to the RPC', async () 
   assert.equal(capturedArgs.p_target_stock, '3')
 })
 
+test('createSupplierForStore delegates creation and store association to one RPC', async () => {
+  let capturedName = ''
+  let capturedArgs: Record<string, unknown> = {}
+  const client = {
+    from() { throw new Error('from() should not be used') },
+    async rpc(name: string, args: Record<string, unknown>) {
+      capturedName = name
+      capturedArgs = args
+      return { data: 'ss-created', error: null }
+    },
+  }
+
+  const gateway = createSupabaseCatalogGateway(client)
+  const id = await gateway.createSupplierForStore({
+    storeId: 's1',
+    name: '  Acme Food  ',
+    vatNumber: ' IT123 ',
+    customerCode: ' ECC-01 ',
+    minimumOrderAmount: 25.5,
+    deliveryNotes: ' Martedì ',
+  })
+
+  assert.equal(id, 'ss-created')
+  assert.equal(capturedName, 'admin_create_supplier_for_store')
+  assert.deepEqual(capturedArgs, {
+    p_store_id: 's1',
+    p_name: 'Acme Food',
+    p_vat_number: 'IT123',
+    p_customer_code: 'ECC-01',
+    p_minimum_order_amount: 25.5,
+    p_delivery_notes: 'Martedì',
+  })
+})
+
 test('maps EAN unique and threshold constraint errors to user messages', () => {
   assert.equal(
     mapCatalogError({ code: '23505', message: 'duplicate key', details: 'articles_ean_unique' }).message,
