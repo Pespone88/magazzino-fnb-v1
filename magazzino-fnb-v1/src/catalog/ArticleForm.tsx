@@ -34,7 +34,7 @@ export function ArticleForm({ storeId, categories: initialCategories, gateway, o
     if (packageValue === null || packageValue <= 0) return { error: 'La quantità per confezione deve essere maggiore di zero' } as const
     if (minValue === null || targetValue === null) return { error: 'Inserisci quantità valide con massimo 3 decimali' } as const
     const thresholdErrors = validateThresholds(minValue, targetValue)
-    if (thresholdErrors.length) return { error: thresholdErrors[0] } as const
+    if (thresholdErrors.length) return { error: thresholdErrors[0] ?? 'Soglie non valide' } as const
     return { packageValue, minValue, targetValue } as const
   }
 
