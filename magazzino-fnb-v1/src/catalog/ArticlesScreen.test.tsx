@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StockBalance } from '../stock/types'
 import type { StoreArticleSummary } from './types'
 import { ArticlesScreen } from './ArticlesScreen'
@@ -30,6 +30,8 @@ const balance: StockBalance = {
   currentUnitCost: null,
   currentValue: null,
 }
+
+afterEach(() => cleanup())
 
 describe('ArticlesScreen', () => {
   it('shows real physical, reserved and available stock', () => {
