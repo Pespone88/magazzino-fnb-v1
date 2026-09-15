@@ -2,7 +2,7 @@ name: Build check
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/catalogo-fornitori]
   workflow_dispatch:
 
 jobs:
@@ -20,5 +20,11 @@ jobs:
           node-version: 24
       - name: Install dependencies
         run: npm install
+      - name: Test
+        run: npm run test:run
+      - name: Bootstrap tests
+        run: npm run test:bootstrap
+      - name: Lint
+        run: npm run lint
       - name: Build
         run: npm run build
