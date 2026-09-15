@@ -3,16 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuthContext } from '../auth/authContext'
 import type { CatalogGateway } from '../catalog/catalogGateway'
+import type { StockGateway } from '../stock/stockGateway'
 import { AppShell } from './AppShell'
 
 const context: AuthContext = {
-  profile: {
-    id: 'admin-1',
-    globalRole: 'ADMIN',
-    active: true,
-    firstName: 'Peppe',
-    lastName: 'Esposito',
-  },
+  profile: { id: 'admin-1', globalRole: 'ADMIN', active: true, firstName: 'Peppe', lastName: 'Esposito' },
   actor: { globalRole: 'ADMIN', memberships: [] },
   stores: [
     { id: 'store-eccellenze', name: 'Eccellenze della Costiera' },
@@ -25,24 +20,31 @@ const gateway = {
   listStoreArticles: vi.fn().mockResolvedValue([]),
 } as unknown as CatalogGateway
 
+const stockGateway = {
+  listBalances: vi.fn().mockResolvedValue([]),
+  listMovements: vi.fn().mockResolvedValue([]),
+} as unknown as StockGateway
+
 describe('AppShell', () => {
-  it('keeps the store context and approved five-slot mobile navigation', async () => {
+  it('keeps five-slot navigation and exposes the real movements module', async () => {
     const user = userEvent.setup()
-    render(<AppShell context={context} gateway={gateway} onSignOut={vi.fn()} />)
+    render(<AppShell context={context} gateway={gateway} stockGateway={stockGateway} onSignOut={vi.fn()} />)
 
     expect(screen.getByLabelText('Store attivo')).toBeInTheDocument()
-
     const mobileNav = screen.getByRole('navigation', { name: 'Navigazione mobile' })
     expect(mobileNav).toHaveTextContent('Home')
     expect(mobileNav).toHaveTextContent('Articoli')
     expect(mobileNav).toHaveTextContent('Ordini')
     expect(mobileNav).toHaveTextContent('Altro')
-    expect(screen.getByRole('button', { name: 'Nuovo articolo' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Nuovo articolo' }))
-    expect(screen.getByRole('heading', { name: 'Nuovo articolo' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Altro' }))
+    await user.click(screen.getByRole('button', { name: /Movimenti/i }))
+    expect(screen.getByRole('heading', { name: 'Movimenti' })).toBeInTheDocument()
+    expect(stockGateway.listMovements).toHaveBeenCalledWith('store-eccellenze', expect.any(Object))
+
+    await user.selectOptions(screen.getByLabelText('Store attivo'), 'store-nonna-titti')
+    expect(screen.getByRole('heading', { name: 'Altro' })).toBeInTheDocument()
 
     expect(document.body.textContent).not.toMatch(/RATIO/i)
-    expect(document.body.textContent).not.toMatch(/Valore magazzino|Sotto minimo|Giacenza/i)
   })
 })
