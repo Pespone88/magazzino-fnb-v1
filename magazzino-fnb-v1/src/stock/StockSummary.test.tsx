@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { StockBalance } from './types'
 import { StockSummary } from './StockSummary'
 
@@ -12,6 +12,8 @@ const balance: StockBalance = {
   currentUnitCost: 1.25,
   currentValue: 25,
 }
+
+afterEach(() => cleanup())
 
 describe('StockSummary', () => {
   it('shows physical, reserved, available and current value', () => {
