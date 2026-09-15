@@ -31,3 +31,11 @@ select has_function_privilege('anon', 'public.admin_adjust_stock(uuid,numeric,te
 select has_function_privilege('anon', 'public.admin_reverse_stock_movement(uuid,text,text)', 'EXECUTE') as anon_reverse_execute;
 select has_function_privilege('authenticated', 'public.admin_adjust_stock(uuid,numeric,text,text)', 'EXECUTE') as authenticated_adjust_execute;
 select has_function_privilege('authenticated', 'public.admin_reverse_stock_movement(uuid,text,text)', 'EXECUTE') as authenticated_reverse_execute;
+
+select to_regprocedure('private.open_stock_reservation(uuid,uuid,numeric,public.stock_reservation_type,uuid,uuid,text)') is not null as has_open_reservation;
+select to_regprocedure('private.release_stock_reservation(uuid)') is not null as has_release_reservation;
+select to_regprocedure('private.consume_stock_reservation(uuid,public.stock_movement_type,numeric,public.stock_source_type,text,text)') is not null as has_consume_reservation;
+
+select to_regprocedure('public.open_stock_reservation(uuid,uuid,numeric,public.stock_reservation_type,uuid,uuid,text)') is null as no_public_open_reservation;
+select to_regprocedure('public.release_stock_reservation(uuid)') is null as no_public_release_reservation;
+select to_regprocedure('public.consume_stock_reservation(uuid,public.stock_movement_type,numeric,public.stock_source_type,text,text)') is null as no_public_consume_reservation;
