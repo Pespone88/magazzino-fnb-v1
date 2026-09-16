@@ -6,6 +6,8 @@ import { NotificationsPanel } from '../catalog/NotificationsPanel'
 import { SuppliersScreen } from '../catalog/SuppliersScreen'
 import { canSelectStore, visibleStoreIds } from '../domain/access'
 import type { StoreId } from '../domain/store'
+import type { InventoryGateway } from '../inventory/inventoryGateway'
+import { InventoryWorkspace } from '../inventory/InventoryWorkspace'
 import type { StockGateway } from '../stock/stockGateway'
 import { StockMovementsScreen } from '../stock/StockMovementsScreen'
 import { MoreScreen } from './MoreScreen'
@@ -15,7 +17,7 @@ const sectionCopy: Record<NavigationKey, { title: string; description: string }>
   home: { title: 'Da fare', description: 'Attività operative e moduli disponibili nello store selezionato.' },
   articles: { title: 'Articoli', description: 'Catalogo dello store, stock reale, soglie operative e fornitori associati.' },
   orders: { title: 'Ordini', description: 'Il flusso ordini sarà attivato dopo catalogo, ricezioni e movimenti.' },
-  more: { title: 'Altro', description: 'Fornitori, movimenti, notifiche e accesso ai prossimi moduli operativi.' },
+  more: { title: 'Altro', description: 'Fornitori, movimenti, inventari, notifiche e accesso ai prossimi moduli operativi.' },
 }
 
 export type CatalogScreenState =
@@ -23,11 +25,12 @@ export type CatalogScreenState =
   | { kind: 'create' }
   | { kind: 'detail'; storeArticleId: string }
 
-type MoreTarget = 'menu' | 'suppliers' | 'notifications' | 'movements'
+type MoreTarget = 'menu' | 'suppliers' | 'notifications' | 'movements' | 'inventories'
 
 type AppShellProps = {
   context: AuthContext
   gateway: CatalogGateway
+  inventoryGateway: InventoryGateway
   stockGateway: StockGateway
   onSignOut(): Promise<void>
 }
@@ -37,7 +40,14 @@ function displayName(context: AuthContext): string {
   return name || 'Utente'
 }
 
-export function AppShell({ context, gateway, stockGateway, onSignOut }: AppShellProps) {
+function moreTitle(target: Exclude<MoreTarget, 'menu'>): string {
+  if (target === 'suppliers') return 'Fornitori'
+  if (target === 'notifications') return 'Notifiche'
+  if (target === 'inventories') return 'Inventari'
+  return 'Movimenti'
+}
+
+export function AppShell({ context, gateway, inventoryGateway, stockGateway, onSignOut }: AppShellProps) {
   const allowedStoreIds = useMemo(
     () => visibleStoreIds(context.actor, context.stores.map((store) => store.id)),
     [context.actor, context.stores],
@@ -120,6 +130,7 @@ export function AppShell({ context, gateway, stockGateway, onSignOut }: AppShell
           <h1>{activeCopy.title}</h1>
           <p>{activeCopy.description}</p>
           <MoreScreen
+            onOpenInventories={() => setMoreTarget('inventories')}
             onOpenMovements={() => openMovements()}
             onOpenNotifications={() => setMoreTarget('notifications')}
             onOpenSuppliers={() => setMoreTarget('suppliers')}
@@ -129,7 +140,7 @@ export function AppShell({ context, gateway, stockGateway, onSignOut }: AppShell
     }
 
     if (activeSection === 'more' && moreTarget !== 'menu') {
-      const title = moreTarget === 'suppliers' ? 'Fornitori' : moreTarget === 'notifications' ? 'Notifiche' : 'Movimenti'
+      const title = moreTitle(moreTarget)
       return (
         <section className="content-panel">
           <button className="text-button" onClick={() => { setMoreTarget('menu'); setMovementArticleFilter(undefined) }} type="button">← Altro</button>
@@ -144,6 +155,14 @@ export function AppShell({ context, gateway, stockGateway, onSignOut }: AppShell
               catalogGateway={gateway}
               gateway={stockGateway}
               initialStoreArticleId={movementArticleFilter}
+              storeId={activeStoreId}
+            />
+          )}
+          {moreTarget === 'inventories' && (
+            <InventoryWorkspace
+              actor={context.actor}
+              catalogGateway={gateway}
+              gateway={inventoryGateway}
               storeId={activeStoreId}
             />
           )}
