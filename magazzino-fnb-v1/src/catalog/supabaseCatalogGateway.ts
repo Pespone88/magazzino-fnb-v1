@@ -1,4 +1,5 @@
 import type {
+  AppNotification,
   ArticleCandidate,
   AssociateArticleInput,
   AssociateSupplierInput,
@@ -7,7 +8,6 @@ import type {
   CreateSupplierForStoreInput,
   CreateSupplierInput,
   LinkArticleSupplierInput,
-  PriceNotification,
   StoreArticleConfigInput,
   StoreSupplierSummary,
   SupplierSummary,
@@ -71,6 +71,10 @@ function stringFromDb(value: unknown, field: string): string {
 
 function nullableStringFromDb(value: unknown): string | null {
   return value === null || value === undefined ? null : stringFromDb(value, 'testo')
+}
+
+function optionalStringFromDb(value: unknown): string | undefined {
+  return value === null || value === undefined ? undefined : stringFromDb(value, 'testo')
 }
 
 export function numericFromDb(value: unknown): number {
@@ -201,6 +205,26 @@ function mapCandidateRow(row: DbRow): ArticleCandidate {
     baseUnit: stringFromDb(row.base_unit, 'article.base_unit') as BaseUnit,
     ean: nullableStringFromDb(row.ean),
     packageQuantity: numericFromDb(row.package_quantity),
+  }
+}
+
+export function mapNotificationRow(row: DbRow): AppNotification {
+  const severity = stringFromDb(row.severity, 'notification.severity')
+  if (severity !== 'NORMAL' && severity !== 'SIGNIFICANT') {
+    throw new Error('Severità notifica non valida')
+  }
+
+  return {
+    id: stringFromDb(row.id, 'notification.id'),
+    storeId: nullableStringFromDb(row.store_id),
+    type: optionalStringFromDb(row.type),
+    severity,
+    title: stringFromDb(row.title, 'notification.title'),
+    body: stringFromDb(row.body, 'notification.body'),
+    entityType: stringFromDb(row.entity_type, 'notification.entity_type'),
+    entityId: stringFromDb(row.entity_id, 'notification.entity_id'),
+    readAt: nullableStringFromDb(row.read_at),
+    createdAt: stringFromDb(row.created_at, 'notification.created_at'),
   }
 }
 
@@ -459,20 +483,10 @@ export function createSupabaseCatalogGateway(client: SupabaseLike): CatalogGatew
 
     async listMyNotifications() {
       const { data, error } = await client.from('notifications').select(`
-        id, store_id, severity, title, body, entity_type, entity_id, read_at, created_at
+        id, store_id, type, severity, title, body, entity_type, entity_id, read_at, created_at
       `).order('created_at', { ascending: false })
       throwCatalogError(error)
-      return asRows(data).map((row): PriceNotification => ({
-        id: stringFromDb(row.id, 'notification.id'),
-        storeId: nullableStringFromDb(row.store_id),
-        severity: stringFromDb(row.severity, 'notification.severity') as PriceNotification['severity'],
-        title: stringFromDb(row.title, 'notification.title'),
-        body: stringFromDb(row.body, 'notification.body'),
-        entityType: stringFromDb(row.entity_type, 'notification.entity_type'),
-        entityId: stringFromDb(row.entity_id, 'notification.entity_id'),
-        readAt: nullableStringFromDb(row.read_at),
-        createdAt: stringFromDb(row.created_at, 'notification.created_at'),
-      }))
+      return asRows(data).map(mapNotificationRow)
     },
 
     async markNotificationRead(notificationId) {

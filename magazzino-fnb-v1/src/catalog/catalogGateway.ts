@@ -110,9 +110,10 @@ export interface LinkArticleSupplierInput {
   isPreferred: boolean
 }
 
-export interface PriceNotification {
+export interface AppNotification {
   id: string
   storeId: string | null
+  type?: string
   severity: 'NORMAL' | 'SIGNIFICANT'
   title: string
   body: string
@@ -121,6 +122,9 @@ export interface PriceNotification {
   readAt: string | null
   createdAt: string
 }
+
+/** @deprecated Use AppNotification. Kept only for adapter compatibility during the module transition. */
+export type PriceNotification = AppNotification
 
 export interface CatalogGateway {
   listCategories(): Promise<Category[]>
@@ -141,6 +145,6 @@ export interface CatalogGateway {
   setPreferredSupplier(linkId: string): Promise<void>
   setSupplierPrice(linkId: string, packagePrice: number): Promise<void>
   listPriceHistory(linkId: string): Promise<PurchasePriceHistoryEntry[]>
-  listMyNotifications(): Promise<PriceNotification[]>
+  listMyNotifications(): Promise<AppNotification[]>
   markNotificationRead(notificationId: string): Promise<void>
 }
