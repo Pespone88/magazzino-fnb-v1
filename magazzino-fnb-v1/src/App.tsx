@@ -1,13 +1,13 @@
 import { AppShell } from './app/AppShell'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { LoginScreen } from './auth/LoginScreen'
-import { createSupabaseCatalogGatewayWithNotifications } from './catalog/supabaseNotificationCatalogGateway'
+import { createSupabaseCatalogGateway } from './catalog/supabaseCatalogGateway'
 import { createSupabaseInventoryGateway } from './inventory/supabaseInventoryGateway'
 import { supabase } from './lib/supabaseClient'
 import { createSupabaseStockGateway } from './stock/supabaseStockGateway'
 
-const catalogGateway = createSupabaseCatalogGatewayWithNotifications(
-  supabase as unknown as Parameters<typeof createSupabaseCatalogGatewayWithNotifications>[0],
+const catalogGateway = createSupabaseCatalogGateway(
+  supabase as unknown as Parameters<typeof createSupabaseCatalogGateway>[0],
 )
 const inventoryGateway = createSupabaseInventoryGateway(
   supabase as unknown as Parameters<typeof createSupabaseInventoryGateway>[0],
