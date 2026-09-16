@@ -45,4 +45,14 @@ describe('ExtraordinaryCountScreen', () => {
 
     expect(onSave).toHaveBeenCalledWith('line-1', 8, 'OTHER', 'Verifica manuale')
   })
+
+  it('does not enable confirmation until the discrepancy reason is persisted by the server', () => {
+    render(<ExtraordinaryCountScreen articles={articles} onConfirm={vi.fn()} onSave={vi.fn()} onStart={vi.fn()} session={session} />)
+
+    const confirm = screen.getByRole('button', { name: 'Conferma conteggio straordinario' })
+    expect(confirm).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Motivo Acqua'), { target: { value: 'PREVIOUS_ERROR' } })
+    expect(confirm).toBeDisabled()
+  })
 })
