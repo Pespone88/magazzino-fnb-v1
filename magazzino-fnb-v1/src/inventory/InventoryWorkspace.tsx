@@ -56,8 +56,6 @@ export function InventoryWorkspace({ actor, gateway, storeId, onStartExtraordina
     setScreen({ kind: 'list' })
     setSession(null)
     void loadList()
-    // gateway is intentionally stable for the app lifecycle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId])
 
   const start = async (type: InventoryType) => {
