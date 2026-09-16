@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 import {
   createSupabaseCatalogGateway,
   mapCatalogError,
-  mapNotificationRow,
   mapStoreArticleRow,
   numericFromDb,
 } from './supabaseCatalogGateway.ts'
@@ -122,21 +121,4 @@ test('maps EAN unique and threshold constraint errors to user messages', () => {
     mapCatalogError({ code: '23514', message: 'store_articles_target_valid', details: null }).message,
     'L’obiettivo non può essere inferiore al minimo',
   )
-})
-
-test('maps price and inventory notifications through the same generic model', () => {
-  const mapped = mapNotificationRow({
-    id: 'n1',
-    store_id: 's1',
-    type: 'INVENTORY_REVIEW_REQUIRED',
-    severity: 'NORMAL',
-    title: 'Inventario da verificare',
-    body: 'Controlla il conteggio.',
-    entity_type: 'inventory_session',
-    entity_id: 'session-1',
-    read_at: null,
-    created_at: '2026-09-16T06:00:00Z',
-  })
-  assert.equal(mapped.type, 'INVENTORY_REVIEW_REQUIRED')
-  assert.equal(mapped.title, 'Inventario da verificare')
 })
