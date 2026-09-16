@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { CatalogGateway, PriceNotification } from './catalogGateway'
+import type { AppNotification, CatalogGateway } from './catalogGateway'
 
 type NotificationsPanelProps = {
   gateway: CatalogGateway
@@ -11,7 +11,7 @@ function formatDate(value: string): string {
 }
 
 export function NotificationsPanel({ gateway, storeId }: NotificationsPanelProps) {
-  const [notifications, setNotifications] = useState<PriceNotification[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
