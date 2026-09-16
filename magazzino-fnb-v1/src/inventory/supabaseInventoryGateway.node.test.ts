@@ -109,5 +109,6 @@ test('maps inventory functional and concurrency errors', () => {
   assert.equal(mapInventoryError({ message: 'All inventory lines must be accepted before approval' }).message, 'Alcune righe non sono ancora accettate.')
   assert.equal(mapInventoryError({ message: 'Reserved quantity exceeds resulting stock' }).message, 'Una rettifica violerebbe una riserva aperta: risolvi prima il flusso operativo collegato.')
   assert.equal(mapInventoryError({ message: 'Extraordinary discrepancy requires preliminary reason' }).message, 'Motivo preliminare obbligatorio per la differenza.')
+  assert.equal(mapInventoryError({ message: 'Preliminary reason is required' }).message, 'Motivo preliminare obbligatorio per la differenza.')
   assert.equal(mapInventoryError({ message: 'Other reason requires note' }).message, 'Per “Altro” inserisci una nota.')
 })
