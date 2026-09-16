@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthContext } from '../auth/authContext'
 import type { CatalogGateway } from '../catalog/catalogGateway'
 import type { InventoryGateway } from '../inventory/inventoryGateway'
@@ -29,6 +29,8 @@ const stockGateway = {
 const inventoryGateway = {
   listSessions: vi.fn().mockResolvedValue([]),
 } as unknown as InventoryGateway
+
+afterEach(() => cleanup())
 
 describe('AppShell', () => {
   it('keeps five-slot navigation and exposes the real movements module', async () => {
