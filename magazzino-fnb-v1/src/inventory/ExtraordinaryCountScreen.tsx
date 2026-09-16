@@ -75,9 +75,9 @@ export function ExtraordinaryCountScreen({ articles, session, onStart, onSave, o
   const confirmable = session.lines.length > 0 && session.lines.every((line) => {
     if (!line.currentCount) return false
     const discrepancy = line.delta !== null && line.delta !== 0
-    const reason = reasonByLine[line.id] || line.currentCount.preliminaryReason
-    const note = (noteByLine[line.id] ?? line.currentCount.note ?? '').trim() || null
-    return inventoryReasonIsValid(reason || null, note, discrepancy)
+    const reason = line.currentCount.preliminaryReason
+    const note = line.currentCount.note?.trim() || null
+    return inventoryReasonIsValid(reason, note, discrepancy)
   })
 
   return (
