@@ -170,7 +170,7 @@ export function mapInventoryError(error: Exclude<QueryError, null>): Error {
   if (context.includes('Reserved quantity exceeds resulting stock') || context.includes('Reservation exceeds available stock')) {
     return new Error('Una rettifica violerebbe una riserva aperta: risolvi prima il flusso operativo collegato.')
   }
-  if (context.includes('Extraordinary discrepancy requires preliminary reason')) {
+  if (context.includes('Extraordinary discrepancy requires preliminary reason') || context.includes('Preliminary reason is required')) {
     return new Error('Motivo preliminare obbligatorio per la differenza.')
   }
   if (context.includes('Other reason requires note')) {
