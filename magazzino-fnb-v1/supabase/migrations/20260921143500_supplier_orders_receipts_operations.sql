@@ -345,14 +345,17 @@ declare
   v_supplier_name text;
   v_result jsonb;
 begin
-  select o.*, s.name into v_order, v_supplier_name
+  select o.* into v_order
   from public.supplier_orders o
-  join public.store_suppliers ss on ss.id=o.store_supplier_id
-  join public.suppliers s on s.id=ss.supplier_id
   where o.id=p_order_id;
 
   if not found then raise exception 'Order not found'; end if;
   perform private.procurement_require_store_access(v_order.store_id);
+
+  select s.name into v_supplier_name
+  from public.store_suppliers ss
+  join public.suppliers s on s.id=ss.supplier_id
+  where ss.id=v_order.store_supplier_id;
 
   select jsonb_build_object(
     'id', v_order.id,
