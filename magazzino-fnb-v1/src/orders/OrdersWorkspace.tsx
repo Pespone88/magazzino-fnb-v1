@@ -99,26 +99,30 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
 
   function applyBulkSupplier() {
     if(!bulkSupplierId){ setError('Seleziona il fornitore da applicare.'); return }
-    let applied=0
-    setSupplierLinks(current=>{
-      const next={...current}
-      for(const item of needs){
-        const compatible=item.suppliers.find(s=>s.storeSupplierId===bulkSupplierId)
-        if(compatible){ next[item.storeArticleId]=compatible.linkId; applied+=1 }
-      }
-      return next
-    })
-    setError(applied===0?'Nessuna riga compatibile con il fornitore selezionato.':null)
+    const compatibleLinks:Record<string,string>={}
+    for(const item of needs){
+      const compatible=item.suppliers.find(s=>s.storeSupplierId===bulkSupplierId)
+      if(compatible) compatibleLinks[item.storeArticleId]=compatible.linkId
+    }
+    if(Object.keys(compatibleLinks).length===0){setError('Nessuna riga compatibile con il fornitore selezionato.');return}
+    setSupplierLinks(current=>({...current,...compatibleLinks}))
+    setError(null)
   }
 
   async function createOrders() {
-    const lines=needs.flatMap(item=>{
-      const qty=n(quantities[item.storeArticleId] ?? '0')
-      const link=supplierLinks[item.storeArticleId]
-      return qty>0 && link ? [{storeArticleId:item.storeArticleId,storeArticleSupplierId:link,quantityBase:qty}] : []
-    })
-    if(!lines.length){ setError('Inserisci almeno una quantità da ordinare.'); return }
-    if(lines.some(l=>!l.storeArticleSupplierId)){ setError('Seleziona il fornitore per tutte le righe.'); return }
+    const selected=needs.map(item=>({
+      item,
+      raw:(quantities[item.storeArticleId]??'0').trim(),
+      quantity:n(quantities[item.storeArticleId]??'0'),
+      link:supplierLinks[item.storeArticleId]??'',
+    })).filter(x=>x.raw!=='' && x.raw!=='0' && x.raw!=='0,0' && x.raw!=='0.0')
+
+    if(!selected.length){ setError('Inserisci almeno una quantità da ordinare.'); return }
+    if(selected.some(x=>!Number.isFinite(x.quantity) || x.quantity<=0 || x.quantity!==Math.round(x.quantity*1000)/1000)){
+      setError('Le quantità devono essere positive e avere al massimo 3 decimali.'); return
+    }
+    if(selected.some(x=>!x.link)){ setError('Seleziona il fornitore per tutte le righe con quantità.'); return }
+    const lines=selected.map(x=>({storeArticleId:x.item.storeArticleId,storeArticleSupplierId:x.link,quantityBase:x.quantity}))
     setBusy(true); setError(null)
     try {
       const ids=await gateway.createDrafts(storeId,lines,null,operationKey('create-orders'))
