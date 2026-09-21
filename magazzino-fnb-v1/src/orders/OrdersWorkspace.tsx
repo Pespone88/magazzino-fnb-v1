@@ -32,7 +32,7 @@ const resolutionLabels: Record<NcResolution,string> = {
   CREDIT_NOTE:'Nota di credito',
   OTHER:'Altro',
 }
-const closedLineStatuses = new Set(['COMPLETED','NOT_SUPPLIED','CLOSED_WITH_DISCREPANCY'])
+const closedLineStatuses = new Set(['COMPLETED','NOT_SUPPLIED','CLOSED_WITH_DISCREPANCY','AWAITING_CREDIT_NOTE'])
 
 const receiptResolutions: Record<Exclude<ReceiptOutcome,'CONFORMING'>,NcResolution[]> = {
   PARTIAL_QUANTITY:['NEXT_DELIVERY','CLOSE'],
