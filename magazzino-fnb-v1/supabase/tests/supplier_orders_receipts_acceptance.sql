@@ -39,6 +39,16 @@ begin
   insert into public.store_article_suppliers(store_id,store_article_id,store_supplier_id,current_package_price,is_preferred,active)
     values(v_store,v_sa3,v_ss1,4,true,true) returning id into v_link3;
 
+  v_result := public.orders_list_need_candidates(v_store);
+  if not exists (
+    select 1
+    from jsonb_array_elements(v_result) item
+    where item->>'storeArticleId'=v_sa1::text
+      and (item->>'underMin')::boolean=true
+      and (item->>'suggestedQuantity')::numeric=10
+      and jsonb_array_length(item->'suppliers')=1
+  ) then raise exception 'Understock candidate or preferred supplier missing'; end if;
+
   v_result := public.orders_create_drafts(
     v_store,
     jsonb_build_array(
