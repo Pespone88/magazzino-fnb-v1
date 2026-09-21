@@ -106,6 +106,9 @@ begin
   if v_on<>5 then raise exception 'Unbilled accepted stock expected 5, got %',v_on; end if;
   if (select count(*) from public.stock_movements where source_id=v_receipt1 and movement_type='SUPPLIER_RECEIPT')<>2 then raise exception 'Receipt must create two movements'; end if;
   if not exists(select 1 from public.purchase_price_history where store_article_supplier_id=v_link1 and source='RECEIPT' and package_price=2.2) then raise exception 'Receipt price history missing'; end if;
+  if not exists(select 1 from public.supplier_nonconformities where order_line_id=v_line1 and type='QUANTITY_MISMATCH' and quantity_affected_base=4) then
+    raise exception 'Quantity mismatch must track the 4-unit order residual';
+  end if;
 
   v_receipt2 := public.orders_confirm_receipt(
     v_order1,'DDT-2',current_date,8.8,0,null,null,
@@ -150,6 +153,19 @@ begin
   perform public.orders_update_nc(v_nc,'CREDIT_NOTE','Fornitore emetterà nota di credito','proc-nc-to-credit');
   if (select status from public.supplier_nonconformities where id=v_nc)<>'AWAITING_CREDIT_NOTE' then raise exception 'NC should await credit note after resolution change'; end if;
   if (select status from public.supplier_order_lines where id=v_line2)<>'AWAITING_CREDIT_NOTE' then raise exception 'Order line should await credit note'; end if;
+
+  begin
+    perform public.orders_confirm_receipt(
+      v_order2,'DDT-AFTER-CREDIT',current_date,3,0,null,null,
+      jsonb_build_array(
+        jsonb_build_object('orderLineId',v_line2,'documentedQuantity',1,'receivedQuantity',1,'acceptedQuantity',1,'documentPackagePrice',3,'priceChangeConfirmed',false,'outcome','CONFORMING')
+      ),
+      'proc-receipt-after-credit'
+    );
+    raise exception 'Expected awaiting-credit-note line to reject receipt';
+  exception when others then
+    if position('Order line is not receivable' in sqlerrm)=0 then raise; end if;
+  end;
 
   perform public.orders_record_credit_note(v_nc,'NC-1',current_date,6,'Ricevuta','proc-credit');
   if (select status from public.supplier_nonconformities where id=v_nc)<>'RESOLVED' then raise exception 'Credit-note NC not resolved'; end if;
