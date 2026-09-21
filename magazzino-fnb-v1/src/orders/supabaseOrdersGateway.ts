@@ -161,6 +161,7 @@ export function mapOrdersError(error: Exclude<QueryError,null>): Error {
   if (context.includes('Document total difference requires explanation')) return new Error('Il totale documento non torna: inserisci una spiegazione negli extra.')
   if (context.includes('Invalid order quantity') || context.includes('Invalid receipt quantity')) return new Error('Quantità non valida.')
   if (context.includes('Nonconforming receipt requires resolution')) return new Error('Seleziona come gestire la difformità.')
+  if (context.includes('Resolution not allowed for nonconformity type') || context.includes('resolution_matrix')) return new Error('La gestione scelta non è compatibile con questo tipo di difformità.')
   if (context.includes('Other resolution requires note')) return new Error('Per “Altro” inserisci una nota.')
   if (context.includes('already closed')) return new Error('La riga è già chiusa.')
   if (context.includes('operation key conflict')) return new Error('Operazione già registrata o non più valida.')
