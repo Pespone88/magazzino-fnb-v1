@@ -24,10 +24,6 @@ export function MoreScreen({ onOpenSuppliers, onOpenNotifications, onOpenMovemen
         <strong>Inventari</strong>
         <span>Apertura, mensile, straordinario, riconteggi e anomalie.</span>
       </button>
-      <div className="module-card disabled-card" aria-disabled="true">
-        <strong>Ricezioni</strong>
-        <span>Prossimamente</span>
-      </div>
     </section>
   )
 }
