@@ -122,6 +122,19 @@ begin
   end if;
 
   perform public.orders_mark_ordered(v_order2,'proc-order2-ordered');
+
+  begin
+    perform public.orders_confirm_receipt(
+      v_order2,'DDT-Q-BAD',current_date,6,0,null,null,
+      jsonb_build_array(
+        jsonb_build_object('orderLineId',v_line2,'documentedQuantity',2,'receivedQuantity',2,'acceptedQuantity',0,'documentPackagePrice',3,'priceChangeConfirmed',false,'outcome','QUALITY_NOT_SUITABLE','resolution','NO_ACTION','note','Combinazione non ammessa')
+      ),
+      'proc-receipt-bad-resolution'
+    );
+    raise exception 'Expected invalid resolution matrix rejection';
+  exception when check_violation then null;
+  end;
+
   v_receipt3 := public.orders_confirm_receipt(
     v_order2,'DDT-Q',current_date,6,0,null,null,
     jsonb_build_array(
