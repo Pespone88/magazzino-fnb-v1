@@ -286,8 +286,23 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
                 <label>Ricevuti<input inputMode="decimal" value={d.receivedText} onChange={e=>patchReceiptLine(line.id,{receivedText:e.target.value})}/></label>
                 <label>Accettati<input inputMode="decimal" value={d.acceptedText} onChange={e=>patchReceiptLine(line.id,{acceptedText:e.target.value})}/></label>
                 <label>Prezzo conf. €<input inputMode="decimal" value={d.priceText} onChange={e=>patchReceiptLine(line.id,{priceText:e.target.value})}/><small>Stimato {money(line.estimatedPackagePrice)} · Ultimo noto {money(latestPrice)}</small></label>
-                <label>Esito<select value={d.outcome} onChange={e=>patchReceiptLine(line.id,{outcome:e.target.value as ReceiptOutcome,resolution:null,actualStoreArticleId:null})}>{Object.entries(outcomeLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
-                {d.outcome!=='CONFORMING'&&<label>Risoluzione<select value={d.resolution??''} onChange={e=>{const value=e.target.value as NcResolution;patchReceiptLine(line.id,{resolution:value||null,actualStoreArticleId:value==='ACCEPT_AS_OTHER_ARTICLE'?d.actualStoreArticleId:null})}}><option value="">Seleziona…</option>{allowedResolutions.map(k=><option key={k} value={k}>{resolutionLabels[k]}</option>)}</select></label>}
+                <label>Esito<select value={d.outcome} onChange={e=>{
+                  const outcome=e.target.value as ReceiptOutcome
+                  patchReceiptLine(line.id,{
+                    outcome,resolution:null,actualStoreArticleId:null,
+                    ...(outcome==='MISSING'?{receivedText:'0',acceptedText:'0'}:{}),
+                    ...((outcome==='WRONG_ITEM'||outcome==='QUALITY_NOT_SUITABLE')?{acceptedText:'0'}:{}),
+                    ...(outcome==='UNBILLED'?{documentedText:'0'}:{}),
+                  })
+                }}>{Object.entries(outcomeLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+                {d.outcome!=='CONFORMING'&&<label>Risoluzione<select value={d.resolution??''} onChange={e=>{
+                  const value=e.target.value as NcResolution
+                  patchReceiptLine(line.id,{
+                    resolution:value||null,
+                    actualStoreArticleId:value==='ACCEPT_AS_OTHER_ARTICLE'?d.actualStoreArticleId:null,
+                    ...(value==='ACCEPT_AS_OTHER_ARTICLE'?{acceptedText:d.receivedText}:{}),
+                  })
+                }}><option value="">Seleziona…</option>{allowedResolutions.map(k=><option key={k} value={k}>{resolutionLabels[k]}</option>)}</select></label>}
               </div>
               {d.outcome==='WRONG_ITEM'&&d.resolution==='ACCEPT_AS_OTHER_ARTICLE'&&<label>Referenza effettivamente ricevuta<select value={d.actualStoreArticleId??''} onChange={e=>patchReceiptLine(line.id,{actualStoreArticleId:e.target.value||null})}><option value="">Seleziona la referenza…</option>{actualCandidates.filter(a=>a.storeArticleId!==line.storeArticleId).map(a=><option value={a.storeArticleId} key={a.storeArticleId}>{a.articleName}</option>)}</select></label>}
               {priceChanged&&<label className="confirm-price"><input type="checkbox" checked={d.priceChangeConfirmed} onChange={e=>patchReceiptLine(line.id,{priceChangeConfirmed:e.target.checked})}/>Confermo la variazione rispetto al prezzo dell’ordine e/o all’ultimo prezzo noto</label>}
