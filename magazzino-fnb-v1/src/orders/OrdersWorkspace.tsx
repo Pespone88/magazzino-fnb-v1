@@ -12,7 +12,7 @@ import { operationKey } from './validation'
 import './orders.css'
 
 type Props = { gateway: OrdersGateway; storeId: string }
-type ReceiptDraft = ReceiptLineInput & { included: boolean; priceText: string }
+type ReceiptDraft = Omit<ReceiptLineInput,'documentedQuantity'|'receivedQuantity'|'acceptedQuantity'|'documentPackagePrice'> & { included: boolean; documentedText: string; receivedText: string; acceptedText: string; priceText: string }
 
 const outcomeLabels: Record<ReceiptOutcome,string> = {
   CONFORMING:'Conforme',
@@ -123,11 +123,11 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
     const drafts:Record<string,ReceiptDraft>={}
     for(const line of detail.lines.filter(l=>!closedLineStatuses.has(l.status))){
       drafts[line.id]={
-        included:true,orderLineId:line.id,documentedQuantity:line.remainingQuantity,
-        receivedQuantity:line.remainingQuantity,acceptedQuantity:line.remainingQuantity,
-        documentPackagePrice:line.estimatedPackagePrice,priceText:String(line.estimatedPackagePrice),
+        included:true,orderLineId:line.id,documentedText:String(line.remainingQuantity),
+        receivedText:String(line.remainingQuantity),acceptedText:String(line.remainingQuantity),
+        priceText:String(line.estimatedPackagePrice),
         priceChangeConfirmed:false,outcome:'CONFORMING',resolution:null,note:null,
-        actualStoreArticleId:line.storeArticleId,
+        actualStoreArticleId:null,
       }
     }
     setReceiptLines(drafts);setDocumentNumber('');setDocumentDate(today());setDocumentTotal('');
@@ -151,9 +151,9 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
         extraNote:extraNote.trim()||null,notes:receiptNotes.trim()||null,
         lines:selected.map(d=>({
           orderLineId:d.orderLineId,
-          documentedQuantity:d.documentedQuantity,
-          receivedQuantity:d.receivedQuantity,
-          acceptedQuantity:d.acceptedQuantity,
+          documentedQuantity:n(d.documentedText),
+          receivedQuantity:n(d.receivedText),
+          acceptedQuantity:n(d.acceptedText),
           documentPackagePrice:d.priceText.trim()?n(d.priceText):null,
           priceChangeConfirmed:d.priceChangeConfirmed,
           outcome:d.outcome,
@@ -222,14 +222,14 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
             <label className="include-line"><input type="checkbox" checked={d.included} onChange={e=>patchReceiptLine(line.id,{included:e.target.checked})}/><strong>{line.articleName}</strong></label>
             {d.included&&<>
               <div className="receipt-grid">
-                <label>Documentati<input inputMode="decimal" value={d.documentedQuantity} onChange={e=>patchReceiptLine(line.id,{documentedQuantity:n(e.target.value)})}/></label>
-                <label>Ricevuti<input inputMode="decimal" value={d.receivedQuantity} onChange={e=>patchReceiptLine(line.id,{receivedQuantity:n(e.target.value)})}/></label>
-                <label>Accettati<input inputMode="decimal" value={d.acceptedQuantity} onChange={e=>patchReceiptLine(line.id,{acceptedQuantity:n(e.target.value)})}/></label>
+                <label>Documentati<input inputMode="decimal" value={d.documentedText} onChange={e=>patchReceiptLine(line.id,{documentedText:e.target.value})}/></label>
+                <label>Ricevuti<input inputMode="decimal" value={d.receivedText} onChange={e=>patchReceiptLine(line.id,{receivedText:e.target.value})}/></label>
+                <label>Accettati<input inputMode="decimal" value={d.acceptedText} onChange={e=>patchReceiptLine(line.id,{acceptedText:e.target.value})}/></label>
                 <label>Prezzo conf. €<input inputMode="decimal" value={d.priceText} onChange={e=>patchReceiptLine(line.id,{priceText:e.target.value})}/></label>
                 <label>Esito<select value={d.outcome} onChange={e=>patchReceiptLine(line.id,{outcome:e.target.value as ReceiptOutcome,resolution:e.target.value==='CONFORMING'?null:d.resolution})}>{Object.entries(outcomeLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
                 {d.outcome!=='CONFORMING'&&<label>Risoluzione<select value={d.resolution??''} onChange={e=>patchReceiptLine(line.id,{resolution:e.target.value as NcResolution||null})}><option value="">Seleziona…</option>{Object.entries(resolutionLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>}
               </div>
-              {d.outcome==='WRONG_ITEM'&&d.resolution==='ACCEPT_AS_OTHER_ARTICLE'&&<label>Referenza effettivamente ricevuta<select value={d.actualStoreArticleId??''} onChange={e=>patchReceiptLine(line.id,{actualStoreArticleId:e.target.value})}>{actualCandidates.map(a=><option value={a.storeArticleId} key={a.storeArticleId}>{a.articleName}</option>)}</select></label>}
+              {d.outcome==='WRONG_ITEM'&&d.resolution==='ACCEPT_AS_OTHER_ARTICLE'&&<label>Referenza effettivamente ricevuta<select value={d.actualStoreArticleId??''} onChange={e=>patchReceiptLine(line.id,{actualStoreArticleId:e.target.value||null})}><option value="">Seleziona la referenza…</option>{actualCandidates.filter(a=>a.storeArticleId!==line.storeArticleId).map(a=><option value={a.storeArticleId} key={a.storeArticleId}>{a.articleName}</option>)}</select></label>}
               {priceChanged&&<label className="confirm-price"><input type="checkbox" checked={d.priceChangeConfirmed} onChange={e=>patchReceiptLine(line.id,{priceChangeConfirmed:e.target.checked})}/>Confermo la variazione di prezzo rispetto all’ordine</label>}
               {d.outcome!=='CONFORMING'&&<label>Nota difformità<input value={d.note??''} onChange={e=>patchReceiptLine(line.id,{note:e.target.value||null})}/></label>}
             </>}
