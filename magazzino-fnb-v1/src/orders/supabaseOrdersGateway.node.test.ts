@@ -28,3 +28,11 @@ test('maps order detail and open line count', () => {
 test('maps explicit price confirmation error', () => {
   assert.equal(mapOrdersError({message:'Receipt price change requires confirmation'}).message,'Il prezzo del documento è diverso: conferma esplicitamente la variazione.')
 })
+
+
+test('maps incompatible nonconformity resolution error', () => {
+  assert.equal(
+    mapOrdersError({message:'Resolution not allowed for nonconformity type'}).message,
+    'La gestione scelta non è compatibile con questo tipo di difformità.',
+  )
+})
