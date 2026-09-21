@@ -14,7 +14,7 @@ Fabbisogni → assegnazione fornitore → ordini separati per fornitore → copi
 1. Nessun ordine automatico: il sotto-scorta è un suggerimento, decide l'utente.
 2. Nessuna approvazione preventiva dell'ordine.
 3. La lista fabbisogni è unica e può contenere articoli di fornitori diversi.
-4. Prima di generare gli ordini, il fornitore di ogni riga è modificabile.
+4. Prima di generare gli ordini, il fornitore di ogni riga è modificabile singolarmente o in blocco.
 5. La generazione suddivide automaticamente la lista in un ordine per fornitore.
 6. Copiare/condividere il testo dell'ordine non modifica lo stato.
 7. Solo “Segna come ordinato” porta la bozza in attesa di ricezione.
@@ -52,9 +52,9 @@ Fabbisogni → assegnazione fornitore → ordini separati per fornitore → copi
 
 ### Ricezione
 - CONFIRMED
-- CANCELLED
+- REVERSED (stato riservato a una futura operazione correttiva; nessuna azione browser in V1)
 
-La V1 salva la ricezione in modo atomico alla conferma; la bozza resta nel client fino alla conferma.
+La V1 salva la ricezione in modo atomico alla conferma; la bozza resta nel client fino alla conferma e una ricezione confermata non è modificabile o cancellabile dal browser.
 
 ### Esito riga ricezione
 - CONFORMING
