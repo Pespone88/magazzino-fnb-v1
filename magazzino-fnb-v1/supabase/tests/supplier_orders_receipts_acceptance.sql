@@ -138,13 +138,18 @@ begin
   v_receipt3 := public.orders_confirm_receipt(
     v_order2,'DDT-Q',current_date,6,0,null,null,
     jsonb_build_array(
-      jsonb_build_object('orderLineId',v_line2,'documentedQuantity',2,'receivedQuantity',2,'acceptedQuantity',0,'documentPackagePrice',3,'priceChangeConfirmed',false,'outcome','QUALITY_NOT_SUITABLE','resolution','CREDIT_NOTE','note','Qualità rifiutata')
+      jsonb_build_object('orderLineId',v_line2,'documentedQuantity',2,'receivedQuantity',2,'acceptedQuantity',0,'documentPackagePrice',3,'priceChangeConfirmed',false,'outcome','QUALITY_NOT_SUITABLE','resolution','REPLACEMENT','note','Qualità rifiutata')
     ),
     'proc-receipt3'
   );
   select id into v_nc from public.supplier_nonconformities where receipt_id=v_receipt3 and order_line_id=v_line2;
-  if v_nc is null or (select status from public.supplier_nonconformities where id=v_nc)<>'AWAITING_CREDIT_NOTE' then raise exception 'Credit-note NC missing'; end if;
+  if v_nc is null or (select status from public.supplier_nonconformities where id=v_nc)<>'AWAITING_REPLACEMENT' then raise exception 'Replacement NC missing'; end if;
+  if (select status from public.supplier_order_lines where id=v_line2)<>'AWAITING_REPLACEMENT' then raise exception 'Order line should await replacement'; end if;
   if exists(select 1 from public.stock_movements where source_id=v_receipt3) then raise exception 'Rejected goods must not enter stock'; end if;
+
+  perform public.orders_update_nc(v_nc,'CREDIT_NOTE','Fornitore emetterà nota di credito','proc-nc-to-credit');
+  if (select status from public.supplier_nonconformities where id=v_nc)<>'AWAITING_CREDIT_NOTE' then raise exception 'NC should await credit note after resolution change'; end if;
+  if (select status from public.supplier_order_lines where id=v_line2)<>'AWAITING_CREDIT_NOTE' then raise exception 'Order line should await credit note'; end if;
 
   perform public.orders_record_credit_note(v_nc,'NC-1',current_date,6,'Ricevuta','proc-credit');
   if (select status from public.supplier_nonconformities where id=v_nc)<>'RESOLVED' then raise exception 'Credit-note NC not resolved'; end if;
