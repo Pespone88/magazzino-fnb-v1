@@ -69,7 +69,7 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
     finally { setLoading(false) }
   }
 
-  useEffect(()=>{ setDetail(null); setReceiptOpen(false); void loadBase() },[storeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{ setDetail(null); setReceiptOpen(false); void loadBase() },[storeId])
 
   async function refreshDetail(orderId:string) {
     const [d,nextOrders]=await Promise.all([gateway.getOrder(orderId),gateway.listOrders(storeId)])
@@ -149,7 +149,18 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
         orderId:detail.id,documentNumber:documentNumber.trim(),documentDate,
         documentTotal:documentTotal.trim()?n(documentTotal):null,extraAmount:n(extraAmount),
         extraNote:extraNote.trim()||null,notes:receiptNotes.trim()||null,
-        lines:selected.map(({included:_,priceText:__,...line})=>({...line,documentPackagePrice:priceText.trim()?n(priceText):null})),
+        lines:selected.map(d=>({
+          orderLineId:d.orderLineId,
+          documentedQuantity:d.documentedQuantity,
+          receivedQuantity:d.receivedQuantity,
+          acceptedQuantity:d.acceptedQuantity,
+          documentPackagePrice:d.priceText.trim()?n(d.priceText):null,
+          priceChangeConfirmed:d.priceChangeConfirmed,
+          outcome:d.outcome,
+          resolution:d.resolution,
+          note:d.note,
+          actualStoreArticleId:d.actualStoreArticleId,
+        })),
         operationKey:operationKey('receipt'),
       })
       setReceiptOpen(false);await loadBase();setDetail(await gateway.getOrder(detail.id));setMode('orders')
