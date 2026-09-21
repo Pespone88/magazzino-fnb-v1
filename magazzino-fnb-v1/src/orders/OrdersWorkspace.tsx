@@ -52,7 +52,7 @@ function ncFollowupResolutions(type:string): NcResolution[] {
   return []
 }
 
-function n(value: string): number { const parsed=Number(value.replace(',','.')); return Number.isFinite(parsed) ? parsed : 0 }
+function n(value: string): number { return Number(value.replace(',','.')) }
 function money(value: number): string { return new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(value) }
 function today(): string { return new Date().toISOString().slice(0,10) }
 
