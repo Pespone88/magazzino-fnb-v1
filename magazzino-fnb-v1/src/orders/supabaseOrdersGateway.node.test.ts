@@ -36,3 +36,15 @@ test('maps incompatible nonconformity resolution error', () => {
     'La gestione scelta non è compatibile con questo tipo di difformità.',
   )
 })
+
+
+test('maps receipt coherence constraint errors', () => {
+  assert.equal(
+    mapOrdersError({message:'violates check constraint "supplier_receipts_extra_explained"'}).message,
+    'Se inserisci un importo extra, specifica anche la spiegazione.',
+  )
+  assert.equal(
+    mapOrdersError({message:'violates check constraint "supplier_receipt_lines_missing_coherent"'}).message,
+    'Un articolo mancante deve avere quantità ricevuta e accettata pari a zero.',
+  )
+})
