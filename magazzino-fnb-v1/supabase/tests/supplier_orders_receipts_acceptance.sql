@@ -76,6 +76,12 @@ begin
 
   perform public.orders_mark_ordered(v_order1,'proc-order1-ordered');
 
+  -- Simula un prezzo corrente già aggiornato dopo la bozza: il documento coincide
+  -- con l'ultimo noto ma differisce dal prezzo congelato dell'ordine.
+  update public.store_article_suppliers
+  set current_package_price=2.2, updated_at=now()
+  where id=v_link1;
+
   begin
     perform public.orders_confirm_receipt(
       v_order1,'DDT-1',current_date,33.2,0,null,null,
@@ -123,7 +129,7 @@ begin
   v_receipt2 := public.orders_confirm_receipt(
     v_order1,'DDT-2',current_date,8.8,0,null,null,
     jsonb_build_array(
-      jsonb_build_object('orderLineId',v_line1,'documentedQuantity',4,'receivedQuantity',4,'acceptedQuantity',4,'documentPackagePrice',2.2,'priceChangeConfirmed',false,'outcome','CONFORMING')
+      jsonb_build_object('orderLineId',v_line1,'documentedQuantity',4,'receivedQuantity',4,'acceptedQuantity',4,'documentPackagePrice',2.2,'priceChangeConfirmed',true,'outcome','CONFORMING')
     ),
     'proc-receipt2'
   );
