@@ -171,3 +171,7 @@ button.module-card { cursor: pointer; }
   padding: 12px;
   font-size: 0.92rem;
 }
+
+.home-cards { display: grid; gap: 14px; margin-top: 28px; }
+.home-cards .foundation-card { margin-top: 0; }
+@media (min-width: 680px) { .home-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
