@@ -15,4 +15,5 @@ test('serializes nonnegative document prices to four decimals max', () => {
   assert.equal(formatOrderPriceForDb(12.3456), '12.3456')
   assert.equal(formatOrderPriceForDb(12.5), '12.5')
   assert.throws(() => formatOrderPriceForDb(-1), /Prezzo non valido/)
+  assert.throws(() => formatOrderPriceForDb(12.34567), /Prezzo non valido/)
 })
