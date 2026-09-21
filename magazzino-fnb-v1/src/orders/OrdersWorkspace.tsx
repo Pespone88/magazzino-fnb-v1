@@ -34,6 +34,24 @@ const resolutionLabels: Record<NcResolution,string> = {
 }
 const closedLineStatuses = new Set(['COMPLETED','NOT_SUPPLIED','CLOSED_WITH_DISCREPANCY'])
 
+const receiptResolutions: Record<Exclude<ReceiptOutcome,'CONFORMING'>,NcResolution[]> = {
+  PARTIAL_QUANTITY:['NEXT_DELIVERY','CLOSE'],
+  MISSING:['NEXT_DELIVERY','NO_ACTION'],
+  WRONG_ITEM:['REPLACEMENT','ACCEPT_AS_OTHER_ARTICLE'],
+  QUALITY_NOT_SUITABLE:['REPLACEMENT','CREDIT_NOTE'],
+  UNBILLED:['NO_ACTION','CLOSE','OTHER'],
+  OTHER:['OTHER','CLOSE','NO_ACTION','REPLACEMENT','CREDIT_NOTE','NEXT_DELIVERY'],
+}
+
+function ncFollowupResolutions(type:string): NcResolution[] {
+  if(type==='QUANTITY_MISMATCH') return ['NEXT_DELIVERY','CLOSE']
+  if(type==='MISSING_ITEM') return ['NEXT_DELIVERY','NO_ACTION']
+  if(type==='QUALITY_NOT_SUITABLE') return ['REPLACEMENT','CREDIT_NOTE']
+  if(type==='UNBILLED_ITEM') return ['NO_ACTION','CLOSE','OTHER']
+  if(type==='OTHER') return ['OTHER','CLOSE','NO_ACTION','REPLACEMENT','CREDIT_NOTE','NEXT_DELIVERY']
+  return []
+}
+
 function n(value: string): number { const parsed=Number(value.replace(',','.')); return Number.isFinite(parsed) ? parsed : 0 }
 function money(value: number): string { return new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(value) }
 function today(): string { return new Date().toISOString().slice(0,10) }
@@ -45,6 +63,9 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
   const [detail,setDetail]=useState<OrderDetail|null>(null)
   const [quantities,setQuantities]=useState<Record<string,string>>({})
   const [supplierLinks,setSupplierLinks]=useState<Record<string,string>>({})
+  const [bulkSupplierId,setBulkSupplierId]=useState('')
+  const [ncResolutionDrafts,setNcResolutionDrafts]=useState<Record<string,NcResolution>>({})
+  const [ncNotes,setNcNotes]=useState<Record<string,string>>({})
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState<string|null>(null)
@@ -62,7 +83,7 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
     setLoading(true); setError(null)
     try {
       const [nextNeeds,nextOrders]=await Promise.all([gateway.listNeedCandidates(storeId),gateway.listOrders(storeId)])
-      setNeeds(nextNeeds); setOrders(nextOrders)
+      setNeeds(nextNeeds); setOrders(nextOrders); setBulkSupplierId('')
       setQuantities(Object.fromEntries(nextNeeds.map(x=>[x.storeArticleId,x.underMin && x.suggestedQuantity>0 ? String(x.suggestedQuantity) : '0'])))
       setSupplierLinks(Object.fromEntries(nextNeeds.map(x=>[x.storeArticleId,(x.suppliers.find(s=>s.isPreferred) ?? x.suppliers[0])?.linkId ?? ''])))
     } catch(e) { setError(e instanceof Error?e.message:'Errore caricamento ordini') }
@@ -74,6 +95,20 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
   async function refreshDetail(orderId:string) {
     const [d,nextOrders]=await Promise.all([gateway.getOrder(orderId),gateway.listOrders(storeId)])
     setDetail(d); setOrders(nextOrders)
+  }
+
+  function applyBulkSupplier() {
+    if(!bulkSupplierId){ setError('Seleziona il fornitore da applicare.'); return }
+    let applied=0
+    setSupplierLinks(current=>{
+      const next={...current}
+      for(const item of needs){
+        const compatible=item.suppliers.find(s=>s.storeSupplierId===bulkSupplierId)
+        if(compatible){ next[item.storeArticleId]=compatible.linkId; applied+=1 }
+      }
+      return next
+    })
+    setError(applied===0?'Nessuna riga compatibile con il fornitore selezionato.':null)
   }
 
   async function createOrders() {
@@ -167,6 +202,18 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
     }catch(e){setError(e instanceof Error?e.message:'Ricezione non riuscita')}finally{setBusy(false)}
   }
 
+  async function updateNonConformity(ncId:string){
+    if(!detail)return
+    const resolution=ncResolutionDrafts[ncId]
+    if(!resolution){setError('Seleziona la nuova gestione della non conformità.');return}
+    setBusy(true);setError(null)
+    try{
+      await gateway.updateNonConformity(ncId,resolution,ncNotes[ncId]?.trim()||null,operationKey('update-nc'))
+      await refreshDetail(detail.id)
+    }catch(e){setError(e instanceof Error?e.message:'Aggiornamento non conformità non riuscito')}
+    finally{setBusy(false)}
+  }
+
   async function recordCreditNote(ncId:string){
     if(!detail)return
     const number=window.prompt('Numero nota di credito'); if(!number?.trim())return
@@ -182,6 +229,12 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
     if(!detail)return []
     return needs.filter(item=>item.suppliers.some(s=>s.storeSupplierId===detail.storeSupplierId))
   },[detail,needs])
+
+  const bulkSuppliers=useMemo(()=>{
+    const byId=new Map<string,string>()
+    for(const item of needs) for(const supplier of item.suppliers) byId.set(supplier.storeSupplierId,supplier.supplierName)
+    return [...byId.entries()].sort((a,b)=>a[1].localeCompare(b[1],'it'))
+  },[needs])
 
   if(loading)return <p aria-live="polite">Caricamento ordini…</p>
 
@@ -217,7 +270,10 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
         </div>
         {detail.lines.filter(l=>receiptLines[l.id]).map(line=>{
           const d=receiptLines[line.id]!
-          const priceChanged=d.priceText.trim()!=='' && Math.abs(n(d.priceText)-line.estimatedPackagePrice)>0.0001
+          const latestPrice=needs.find(item=>item.storeArticleId===line.storeArticleId)?.suppliers.find(s=>s.storeSupplierId===detail.storeSupplierId)?.currentPackagePrice ?? line.estimatedPackagePrice
+          const enteredPrice=d.priceText.trim()===''?null:n(d.priceText)
+          const priceChanged=enteredPrice!==null && (Math.abs(enteredPrice-line.estimatedPackagePrice)>0.0001 || Math.abs(enteredPrice-latestPrice)>0.0001)
+          const allowedResolutions=d.outcome==='CONFORMING'?[]:receiptResolutions[d.outcome]
           return <article className="receipt-line" key={line.id}>
             <label className="include-line"><input type="checkbox" checked={d.included} onChange={e=>patchReceiptLine(line.id,{included:e.target.checked})}/><strong>{line.articleName}</strong></label>
             {d.included&&<>
@@ -225,12 +281,12 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
                 <label>Documentati<input inputMode="decimal" value={d.documentedText} onChange={e=>patchReceiptLine(line.id,{documentedText:e.target.value})}/></label>
                 <label>Ricevuti<input inputMode="decimal" value={d.receivedText} onChange={e=>patchReceiptLine(line.id,{receivedText:e.target.value})}/></label>
                 <label>Accettati<input inputMode="decimal" value={d.acceptedText} onChange={e=>patchReceiptLine(line.id,{acceptedText:e.target.value})}/></label>
-                <label>Prezzo conf. €<input inputMode="decimal" value={d.priceText} onChange={e=>patchReceiptLine(line.id,{priceText:e.target.value})}/></label>
-                <label>Esito<select value={d.outcome} onChange={e=>patchReceiptLine(line.id,{outcome:e.target.value as ReceiptOutcome,resolution:e.target.value==='CONFORMING'?null:d.resolution})}>{Object.entries(outcomeLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
-                {d.outcome!=='CONFORMING'&&<label>Risoluzione<select value={d.resolution??''} onChange={e=>patchReceiptLine(line.id,{resolution:e.target.value as NcResolution||null})}><option value="">Seleziona…</option>{Object.entries(resolutionLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>}
+                <label>Prezzo conf. €<input inputMode="decimal" value={d.priceText} onChange={e=>patchReceiptLine(line.id,{priceText:e.target.value})}/><small>Stimato {money(line.estimatedPackagePrice)} · Ultimo noto {money(latestPrice)}</small></label>
+                <label>Esito<select value={d.outcome} onChange={e=>patchReceiptLine(line.id,{outcome:e.target.value as ReceiptOutcome,resolution:null,actualStoreArticleId:null})}>{Object.entries(outcomeLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+                {d.outcome!=='CONFORMING'&&<label>Risoluzione<select value={d.resolution??''} onChange={e=>{const value=e.target.value as NcResolution;patchReceiptLine(line.id,{resolution:value||null,actualStoreArticleId:value==='ACCEPT_AS_OTHER_ARTICLE'?d.actualStoreArticleId:null})}}><option value="">Seleziona…</option>{allowedResolutions.map(k=><option key={k} value={k}>{resolutionLabels[k]}</option>)}</select></label>}
               </div>
               {d.outcome==='WRONG_ITEM'&&d.resolution==='ACCEPT_AS_OTHER_ARTICLE'&&<label>Referenza effettivamente ricevuta<select value={d.actualStoreArticleId??''} onChange={e=>patchReceiptLine(line.id,{actualStoreArticleId:e.target.value||null})}><option value="">Seleziona la referenza…</option>{actualCandidates.filter(a=>a.storeArticleId!==line.storeArticleId).map(a=><option value={a.storeArticleId} key={a.storeArticleId}>{a.articleName}</option>)}</select></label>}
-              {priceChanged&&<label className="confirm-price"><input type="checkbox" checked={d.priceChangeConfirmed} onChange={e=>patchReceiptLine(line.id,{priceChangeConfirmed:e.target.checked})}/>Confermo la variazione di prezzo rispetto all’ordine</label>}
+              {priceChanged&&<label className="confirm-price"><input type="checkbox" checked={d.priceChangeConfirmed} onChange={e=>patchReceiptLine(line.id,{priceChangeConfirmed:e.target.checked})}/>Confermo la variazione rispetto al prezzo dell’ordine e/o all’ultimo prezzo noto</label>}
               {d.outcome!=='CONFORMING'&&<label>Nota difformità<input value={d.note??''} onChange={e=>patchReceiptLine(line.id,{note:e.target.value||null})}/></label>}
             </>}
           </article>
@@ -240,7 +296,20 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
       </section>}
 
       {detail.receipts.length>0&&<section><h3>Ricezioni</h3>{detail.receipts.map(r=><article className="order-card compact" key={r.id}><strong>{r.documentNumber}</strong><p>{r.documentDate} · {r.lines.length} righe · {r.documentTotal===null?'Totale non indicato':money(r.documentTotal)}</p></article>)}</section>}
-      {detail.nonConformities.length>0&&<section><h3>Non conformità fornitore</h3>{detail.nonConformities.map(nc=><article className="order-card compact" key={nc.id}><div className="order-card-title"><strong>{nc.type.replaceAll('_',' ')}</strong><span className="status-chip">{nc.status}</span></div><p>{nc.note??'Nessuna nota'} · {nc.resolution??'Risoluzione da definire'}</p>{nc.status==='AWAITING_CREDIT_NOTE'&&<button className="secondary-button" disabled={busy} onClick={()=>void recordCreditNote(nc.id)} type="button">Registra nota di credito</button>}</article>)}</section>}
+      {detail.nonConformities.length>0&&<section><h3>Non conformità fornitore</h3>{detail.nonConformities.map(nc=>{
+        const followups=ncFollowupResolutions(nc.type)
+        const canUpdate=(nc.status==='OPEN'||nc.status==='AWAITING_REPLACEMENT')&&followups.length>1
+        return <article className="order-card compact" key={nc.id}>
+          <div className="order-card-title"><strong>{nc.type.replaceAll('_',' ')}</strong><span className="status-chip">{nc.status}</span></div>
+          <p>{nc.quantityAffected===null?'Quantità non indicata':`Quantità coinvolta ${nc.quantityAffected}`} · {nc.note??'Nessuna nota'} · {nc.resolution??'Risoluzione da definire'}</p>
+          {canUpdate&&<div className="nc-actions">
+            <label>Gestione<select value={ncResolutionDrafts[nc.id]??nc.resolution??''} onChange={e=>setNcResolutionDrafts(current=>({...current,[nc.id]:e.target.value as NcResolution}))}>{followups.map(k=><option key={k} value={k}>{resolutionLabels[k]}</option>)}</select></label>
+            <label>Nota<input value={ncNotes[nc.id]??''} onChange={e=>setNcNotes(current=>({...current,[nc.id]:e.target.value}))}/></label>
+            <button className="secondary-button" disabled={busy} onClick={()=>void updateNonConformity(nc.id)} type="button">Aggiorna gestione</button>
+          </div>}
+          {nc.status==='AWAITING_CREDIT_NOTE'&&<button className="secondary-button" disabled={busy} onClick={()=>void recordCreditNote(nc.id)} type="button">Registra nota di credito</button>}
+        </article>
+      })}</section>}
     </section>
   }
 
@@ -249,6 +318,10 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
     <div className="orders-tabs"><button className={mode==='needs'?'primary-button':'secondary-button'} onClick={()=>setMode('needs')} type="button">Fabbisogni</button><button className={mode==='orders'?'primary-button':'secondary-button'} onClick={()=>setMode('orders')} type="button">Ordini</button></div>
     {mode==='needs'?<>
       <div className="orders-intro"><h2>Lista fabbisogni</h2><p>Il sistema suggerisce il reintegro sotto-scorta, ma non crea ordini automaticamente.</p></div>
+      <div className="bulk-supplier">
+        <label>Fornitore da applicare in blocco<select value={bulkSupplierId} onChange={e=>setBulkSupplierId(e.target.value)}><option value="">Seleziona…</option>{bulkSuppliers.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
+        <button className="secondary-button" onClick={applyBulkSupplier} type="button">Applica alle righe compatibili</button>
+      </div>
       {needs.map(item=><article className="need-row" key={item.storeArticleId}>
         <div><div className="order-card-title"><strong>{item.articleName}</strong>{item.underMin&&<span className="warning-chip">Sotto scorta</span>}</div><small>Disponibile {item.available} {item.baseUnit} · Min {item.minStock} · Target {item.targetStock}</small></div>
         <label>Quantità<input inputMode="decimal" value={quantities[item.storeArticleId]??'0'} onChange={e=>setQuantities(q=>({...q,[item.storeArticleId]:e.target.value}))}/></label>
