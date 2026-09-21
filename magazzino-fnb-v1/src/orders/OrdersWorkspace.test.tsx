@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrdersGateway } from './ordersGateway'
 import { OrdersWorkspace } from './OrdersWorkspace'
 import type { NeedCandidate } from './types'
@@ -30,6 +30,8 @@ function gatewayWithNeeds(needs: NeedCandidate[]): OrdersGateway {
     createDrafts:vi.fn(),
   } as unknown as OrdersGateway
 }
+
+afterEach(cleanup)
 
 describe('OrdersWorkspace',()=>{
   it('does not silently skip a requested row without supplier',async()=>{
