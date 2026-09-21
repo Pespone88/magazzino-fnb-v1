@@ -8,6 +8,8 @@ import { canSelectStore, visibleStoreIds } from '../domain/access'
 import type { StoreId } from '../domain/store'
 import type { InventoryGateway } from '../inventory/inventoryGateway'
 import { InventoryWorkspace } from '../inventory/InventoryWorkspace'
+import type { OrdersGateway } from '../orders/ordersGateway'
+import { OrdersWorkspace } from '../orders/OrdersWorkspace'
 import type { StockGateway } from '../stock/stockGateway'
 import { StockMovementsScreen } from '../stock/StockMovementsScreen'
 import { MoreScreen } from './MoreScreen'
@@ -16,7 +18,7 @@ import { primaryNavigation, type NavigationKey } from './navigation'
 const sectionCopy: Record<NavigationKey, { title: string; description: string }> = {
   home: { title: 'Da fare', description: 'Attività operative e moduli disponibili nello store selezionato.' },
   articles: { title: 'Articoli', description: 'Catalogo dello store, stock reale, soglie operative e fornitori associati.' },
-  orders: { title: 'Ordini', description: 'Il flusso ordini sarà attivato dopo catalogo, ricezioni e movimenti.' },
+  orders: { title: 'Ordini', description: 'Fabbisogni, ordini fornitori, ricezioni e non conformità dello store selezionato.' },
   more: { title: 'Altro', description: 'Fornitori, movimenti, inventari, notifiche e accesso ai prossimi moduli operativi.' },
 }
 
@@ -31,6 +33,7 @@ type AppShellProps = {
   context: AuthContext
   gateway: CatalogGateway
   inventoryGateway: InventoryGateway
+  ordersGateway: OrdersGateway
   stockGateway: StockGateway
   onSignOut(): Promise<void>
 }
@@ -47,7 +50,7 @@ function moreTitle(target: Exclude<MoreTarget, 'menu'>): string {
   return 'Movimenti'
 }
 
-export function AppShell({ context, gateway, inventoryGateway, stockGateway, onSignOut }: AppShellProps) {
+export function AppShell({ context, gateway, inventoryGateway, ordersGateway, stockGateway, onSignOut }: AppShellProps) {
   const allowedStoreIds = useMemo(
     () => visibleStoreIds(context.actor, context.stores.map((store) => store.id)),
     [context.actor, context.stores],
@@ -166,6 +169,17 @@ export function AppShell({ context, gateway, inventoryGateway, stockGateway, onS
               storeId={activeStoreId}
             />
           )}
+        </section>
+      )
+    }
+
+    if (activeSection === 'orders') {
+      return (
+        <section className="content-panel">
+          <span className="eyebrow">{activeStore?.name ?? 'Nessuno store'}</span>
+          <h1>{activeCopy.title}</h1>
+          <p>{activeCopy.description}</p>
+          <OrdersWorkspace key={activeStoreId} gateway={ordersGateway} storeId={activeStoreId} />
         </section>
       )
     }
