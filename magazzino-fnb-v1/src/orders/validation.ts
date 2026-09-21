@@ -6,7 +6,9 @@ export function formatOrderQuantityForDb(value: number): string {
 }
 
 export function formatOrderPriceForDb(value: number): string {
-  if (!Number.isFinite(value) || value < 0) throw new Error('Prezzo non valido')
+  if (!Number.isFinite(value) || value < 0 || value !== Math.round(value * 10000) / 10000) {
+    throw new Error('Prezzo non valido')
+  }
   return value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
 }
 
