@@ -10,6 +10,7 @@ import type { InventoryGateway } from '../inventory/inventoryGateway'
 import { InventoryWorkspace } from '../inventory/InventoryWorkspace'
 import type { OrdersGateway } from '../orders/ordersGateway'
 import { OrdersWorkspace } from '../orders/OrdersWorkspace'
+import { UnderstockHomeCard } from '../orders/UnderstockHomeCard'
 import type { StockGateway } from '../stock/stockGateway'
 import { StockMovementsScreen } from '../stock/StockMovementsScreen'
 import { MoreScreen } from './MoreScreen'
@@ -190,9 +191,12 @@ export function AppShell({ context, gateway, inventoryGateway, ordersGateway, st
         <h1>{activeCopy.title}</h1>
         <p>{activeCopy.description}</p>
         {activeSection === 'home' && (
-          <div className="foundation-card">
-            <strong>Accesso protetto</strong>
-            <p>Profilo, ruolo e store vengono caricati da Supabase e filtrati dalle policy RLS del database.</p>
+          <div className="home-cards">
+            <UnderstockHomeCard gateway={ordersGateway} storeId={activeStoreId} onOpenOrders={() => openSection('orders')} />
+            <div className="foundation-card">
+              <strong>Accesso protetto</strong>
+              <p>Profilo, ruolo e store vengono caricati da Supabase e filtrati dalle policy RLS del database.</p>
+            </div>
           </div>
         )}
       </section>
