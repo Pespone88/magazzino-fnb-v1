@@ -2,7 +2,7 @@ name: Build check
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature-ordini-ricezioni]
   workflow_dispatch:
 
 jobs:
