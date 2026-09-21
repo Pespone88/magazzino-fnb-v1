@@ -208,7 +208,7 @@ export function OrdersWorkspace({gateway,storeId}:Props) {
 
   async function updateNonConformity(ncId:string){
     if(!detail)return
-    const resolution=ncResolutionDrafts[ncId]
+    const resolution=ncResolutionDrafts[ncId] ?? detail.nonConformities.find(nc=>nc.id===ncId)?.resolution
     if(!resolution){setError('Seleziona la nuova gestione della non conformità.');return}
     setBusy(true);setError(null)
     try{
