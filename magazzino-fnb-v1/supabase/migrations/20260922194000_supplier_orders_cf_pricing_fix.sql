@@ -8,7 +8,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 declare
   v_package_quantity numeric(14,3);
   v_base_unit public.catalog_base_unit;
@@ -80,7 +80,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 revoke all on function private.record_store_article_supplier_price() from public, anon, authenticated;
 
@@ -91,7 +91,7 @@ create or replace function private.procurement_record_receipt_price(
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 declare
   v_link public.store_article_suppliers%rowtype;
   v_article public.articles%rowtype;
@@ -143,7 +143,7 @@ begin
     );
   end if;
 end;
-$;
+$$;
 
 update public.purchase_price_history
 set unit_price_snapshot = package_price
