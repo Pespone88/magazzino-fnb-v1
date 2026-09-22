@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CatalogGateway, StoreSupplierSummary } from '../catalog/catalogGateway.ts'
 import type { OrdersGateway } from './ordersGateway.ts'
 import type {
@@ -393,8 +393,17 @@ function ReceiptScreen({
                     const outcome = e.target.value as SupplierReceiptOutcome
                     const defaults = allowedResolutions(outcome)
                     const patch: Partial<ReceiptDraft> = { outcome, resolution: defaults[0] ?? '' }
-                    if (outcome === 'MISSING') Object.assign(patch, { received: '0', accepted: '0' })
-                    if (outcome === 'CONFORMING') Object.assign(patch, { resolution: '', actualStoreArticleId: line.storeArticleId })
+                    if (outcome === 'MISSING') Object.assign(patch, { received: '0', accepted: '0', actualStoreArticleId: line.storeArticleId })
+                    if (outcome === 'WRONG_ITEM') Object.assign(patch, { accepted: '0', actualStoreArticleId: line.storeArticleId })
+                    if (outcome === 'QUALITY_NOT_SUITABLE') Object.assign(patch, { accepted: '0', actualStoreArticleId: line.storeArticleId })
+                    if (outcome === 'UNBILLED') Object.assign(patch, { documented: '0' })
+                    if (outcome === 'CONFORMING') Object.assign(patch, {
+                      documented: String(line.remainingQuantity),
+                      received: String(line.remainingQuantity),
+                      accepted: String(line.remainingQuantity),
+                      resolution: '',
+                      actualStoreArticleId: line.storeArticleId,
+                    })
                     setDraft(line.id, patch)
                   }}
                   value={draft.outcome}
@@ -406,7 +415,16 @@ function ReceiptScreen({
               </label>
               {resolutions.length > 0 && (
                 <label>Gestione
-                  <select onChange={(e) => setDraft(line.id, { resolution: e.target.value as SupplierResolution })} value={draft.resolution}>
+                  <select
+                    onChange={(e) => {
+                      const resolution = e.target.value as SupplierResolution
+                      setDraft(line.id, {
+                        resolution,
+                        ...(resolution === 'ACCEPT_AS_OTHER_ARTICLE' ? { actualStoreArticleId: '' } : {}),
+                      })
+                    }}
+                    value={draft.resolution}
+                  >
                     {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolutionLabel(resolution)}</option>)}
                   </select>
                 </label>
@@ -654,11 +672,17 @@ export function OrdersWorkspace({ catalogGateway, gateway, storeId }: Props) {
   const [storeSuppliers, setStoreSuppliers] = useState<StoreSupplierSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const underMin = candidates.filter((candidate) => candidate.underMin).length
 
   const loadList = async () => {
     setLoading(true)
     try {
-      setOrders(await gateway.listOrders(storeId))
+      const [nextOrders, nextCandidates] = await Promise.all([
+        gateway.listOrders(storeId),
+        gateway.listNeedCandidates(storeId),
+      ])
+      setOrders(nextOrders)
+      setCandidates(nextCandidates)
       setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Ordini non disponibili.')
@@ -766,8 +790,6 @@ export function OrdersWorkspace({ catalogGateway, gateway, storeId }: Props) {
       </div>
     )
   }
-
-  const underMin = useMemo(() => candidates.filter((candidate) => candidate.underMin).length, [candidates])
 
   return (
     <div className="orders-workspace orders-stack">
