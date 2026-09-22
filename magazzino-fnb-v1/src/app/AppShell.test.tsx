@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthContext } from '../auth/authContext'
 import type { CatalogGateway } from '../catalog/catalogGateway'
 import type { InventoryGateway } from '../inventory/inventoryGateway'
+import type { OrdersGateway } from '../orders/ordersGateway'
 import type { StockGateway } from '../stock/stockGateway'
 import { AppShell } from './AppShell'
 
@@ -30,6 +31,11 @@ const inventoryGateway = {
   listSessions: vi.fn().mockResolvedValue([]),
 } as unknown as InventoryGateway
 
+const ordersGateway = {
+  listOrders: vi.fn().mockResolvedValue([]),
+  listNeedCandidates: vi.fn().mockResolvedValue([]),
+} as unknown as OrdersGateway
+
 afterEach(() => cleanup())
 
 describe('AppShell', () => {
@@ -40,6 +46,7 @@ describe('AppShell', () => {
         context={context}
         gateway={gateway}
         inventoryGateway={inventoryGateway}
+        ordersGateway={ordersGateway}
         stockGateway={stockGateway}
         onSignOut={vi.fn()}
       />,
@@ -70,6 +77,7 @@ describe('AppShell', () => {
         context={context}
         gateway={gateway}
         inventoryGateway={inventoryGateway}
+        ordersGateway={ordersGateway}
         stockGateway={stockGateway}
         onSignOut={vi.fn()}
       />,
@@ -86,4 +94,29 @@ describe('AppShell', () => {
     await user.selectOptions(screen.getByLabelText('Store attivo'), 'store-nonna-titti')
     expect(screen.getByRole('heading', { name: 'Altro' })).toBeInTheDocument()
   })
+  it('opens supplier orders for the active store', async () => {
+    const user = userEvent.setup()
+    render(
+      <AppShell
+        context={context}
+        gateway={gateway}
+        inventoryGateway={inventoryGateway}
+        ordersGateway={ordersGateway}
+        stockGateway={stockGateway}
+        onSignOut={vi.fn()}
+      />,
+    )
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Navigazione mobile' })
+    await user.click(within(mobileNav).getByRole('button', { name: 'Ordini' }))
+
+    expect(screen.getByRole('heading', { name: 'Ordini' })).toBeInTheDocument()
+    expect(await screen.findByText('Nessun ordine presente.')).toBeInTheDocument()
+    expect(ordersGateway.listOrders).toHaveBeenCalledWith('store-eccellenze')
+    expect(ordersGateway.listNeedCandidates).toHaveBeenCalledWith('store-eccellenze')
+
+    await user.selectOptions(screen.getByLabelText('Store attivo'), 'store-nonna-titti')
+    expect(ordersGateway.listOrders).toHaveBeenCalledWith('store-nonna-titti')
+  })
+
 })
