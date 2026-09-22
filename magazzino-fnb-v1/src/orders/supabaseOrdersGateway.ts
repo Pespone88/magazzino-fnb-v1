@@ -47,7 +47,8 @@ function bool(value: unknown, field: string): boolean {
   return value
 }
 function formatQty(value: number): string {
-  if (!Number.isFinite(value) || value < 0 || Math.round(value * 1000) !== value * 1000) throw new Error('Quantità non valida.')
+  const scaled = value * 1000
+  if (!Number.isFinite(value) || value < 0 || Math.abs(scaled - Math.round(scaled)) >= 1e-9) throw new Error('Quantità non valida.')
   return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
 }
 function formatMoney(value: number): string {
