@@ -112,24 +112,24 @@ function allowedResolutions(outcome: SupplierReceiptOutcome): SupplierResolution
 }
 
 function textForOrder(order: SupplierOrderDetail): string {
-  const lines = order.lines.map((line) => {
-    const packs = line.packageQuantity > 0 ? line.orderedQuantity / line.packageQuantity : 0
-    const packText = Number.isInteger(packs) ? `${packs} CF` : `${quantity(line.orderedQuantity)} ${line.baseUnit}`
-    return `• ${line.articleName}: ${packText}`
-  })
+  const lines = order.lines.map((line) => `• ${line.articleName}: ${quantity(line.orderedQuantity)} ${line.baseUnit}`)
   return [`ORDINE - ${order.supplierName}`, ...lines, `Totale stimato: ${money(order.estimatedTotal)}`].join('\n')
+}
+
+function hasAtMostThreeDecimals(value: number): boolean {
+  return Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-9
 }
 
 function parsePositive(value: string): number | null {
   if (!value.trim()) return null
   const n = Number(value.replace(',', '.'))
-  return Number.isFinite(n) && n > 0 && Math.round(n * 1000) === n * 1000 ? n : null
+  return Number.isFinite(n) && n > 0 && hasAtMostThreeDecimals(n) ? n : null
 }
 
 function parseNonNegative(value: string): number | null {
   if (!value.trim()) return null
   const n = Number(value.replace(',', '.'))
-  return Number.isFinite(n) && n >= 0 && Math.round(n * 1000) === n * 1000 ? n : null
+  return Number.isFinite(n) && n >= 0 && hasAtMostThreeDecimals(n) ? n : null
 }
 
 function NewOrderScreen({
@@ -274,6 +274,7 @@ function ReceiptScreen({
   const [extraNote, setExtraNote] = useState('')
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, ReceiptDraft>>(() => Object.fromEntries(
     receivable.map((line) => [line.id, {
       documented: String(line.remainingQuantity),
@@ -303,16 +304,37 @@ function ReceiptScreen({
 
   const submit = async () => {
     if (!documentNumber.trim() || !documentDate || receivable.length === 0) return
-    const lines = receivable.map((line) => {
+
+    const lines: ConfirmReceiptInput['lines'] = []
+    for (const line of receivable) {
       const draft = drafts[line.id]
       const documented = parseNonNegative(draft.documented)
       const received = parseNonNegative(draft.received)
       const accepted = parseNonNegative(draft.accepted)
       const price = draft.price.trim() ? Number(draft.price.replace(',', '.')) : null
+
       if (documented === null || received === null || accepted === null || accepted > received || (price !== null && (!Number.isFinite(price) || price < 0))) {
-        throw new Error(`Quantità non valida per ${line.articleName}.`)
+        setValidationError(`Quantità o prezzo non valido per ${line.articleName}.`)
+        return
       }
-      return {
+      if (draft.outcome !== 'CONFORMING' && !draft.resolution) {
+        setValidationError(`Scegli come gestire la difformità di ${line.articleName}.`)
+        return
+      }
+      if (draft.resolution === 'OTHER' && !draft.note.trim()) {
+        setValidationError(`Inserisci una nota per la gestione “Altro” di ${line.articleName}.`)
+        return
+      }
+      if (draft.outcome === 'WRONG_ITEM' && draft.resolution === 'ACCEPT_AS_OTHER_ARTICLE' && !draft.actualStoreArticleId) {
+        setValidationError(`Seleziona l’articolo realmente ricevuto per ${line.articleName}.`)
+        return
+      }
+      if (draft.outcome === 'CONFORMING' && (documented !== received || received !== accepted)) {
+        setValidationError(`Una riga conforme deve avere quantità DDT, ricevuta e accettata uguali per ${line.articleName}.`)
+        return
+      }
+
+      lines.push({
         orderLineId: line.id,
         documentedQuantity: documented,
         receivedQuantity: received,
@@ -320,16 +342,20 @@ function ReceiptScreen({
         documentPackagePrice: price,
         priceChangeConfirmed: draft.priceChangeConfirmed,
         outcome: draft.outcome,
-        resolution: draft.outcome === 'CONFORMING' ? null : (draft.resolution || null),
+        resolution: draft.outcome === 'CONFORMING' ? null : draft.resolution as SupplierResolution,
         note: draft.note.trim() || null,
         actualStoreArticleId: draft.actualStoreArticleId || line.storeArticleId,
-      }
-    })
+      })
+    }
 
     const total = documentTotal.trim() ? Number(documentTotal.replace(',', '.')) : null
     const extra = Number(extraAmount.replace(',', '.'))
-    if ((total !== null && (!Number.isFinite(total) || total < 0)) || !Number.isFinite(extra) || extra < 0) return
+    if ((total !== null && (!Number.isFinite(total) || total < 0)) || !Number.isFinite(extra) || extra < 0) {
+      setValidationError('Totale documento o extra non valido.')
+      return
+    }
 
+    setValidationError(null)
     setBusy(true)
     try {
       await onConfirm({
@@ -353,6 +379,7 @@ function ReceiptScreen({
         <span className="role-chip">Ricezione DDT</span>
       </div>
       <h2>{order.supplierName}</h2>
+      {validationError && <p className="form-error" role="alert">{validationError}</p>}
       <div className="order-form-grid">
         <label>Numero DDT<input onChange={(event) => setDocumentNumber(event.target.value)} value={documentNumber} /></label>
         <label>Data DDT<input onChange={(event) => setDocumentDate(event.target.value)} type="date" value={documentDate} /></label>
