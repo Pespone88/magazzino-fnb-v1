@@ -65,6 +65,16 @@ begin
     2.90, true, true
   ) returning id into v_link;
 
+  if not exists (
+    select 1
+    from public.purchase_price_history
+    where store_article_supplier_id=v_link
+      and package_price=2.90
+      and unit_price_snapshot=2.900000
+  ) then
+    raise exception 'CF manual price history unit price must stay 2.90';
+  end if;
+
   v_result := public.orders_create_drafts(
     v_store,
     jsonb_build_array(jsonb_build_object(
@@ -132,6 +142,17 @@ begin
 
   if v_unit_cost <> 2.900000 then
     raise exception 'CF stock unit cost expected 2.90, got %', v_unit_cost;
+  end if;
+
+  if not exists (
+    select 1
+    from public.purchase_price_history
+    where store_article_supplier_id=v_link
+      and source='RECEIPT'::public.purchase_price_source
+      and package_price=2.90
+      and unit_price_snapshot=2.900000
+  ) then
+    raise exception 'CF receipt price history unit price must stay 2.90';
   end if;
 end $$;
 
