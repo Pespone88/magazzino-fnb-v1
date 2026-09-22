@@ -21,11 +21,11 @@ export function validateThresholds(minStock: number, targetStock: number): strin
   return []
 }
 
-export function calculateUnitPrice(packagePrice: number, packageQuantity: number): number {
+export function calculateUnitPrice(packagePrice: number, packageQuantity: number, baseUnit?: typeof BASE_UNITS[number]): number {
   if (packageQuantity <= 0) {
     throw new Error('La quantità per confezione deve essere maggiore di zero')
   }
-  return packagePrice / packageQuantity
+  return baseUnit === 'CF' ? packagePrice : packagePrice / packageQuantity
 }
 
 export function calculatePriceChangePercent(previous: number, next: number): number | null {
