@@ -35,6 +35,10 @@ function num(value: unknown, field: string): number {
   if (!Number.isFinite(parsed)) throw new Error(`Campo ${field} non valido`)
   return parsed
 }
+function stringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) throw new Error(`Campo ${field} non valido`)
+  return value as string[]
+}
 function nnum(value: unknown, field: string): number | null {
   return value === null || value === undefined ? null : num(value, field)
 }
@@ -218,7 +222,8 @@ export function createSupabaseOrdersGateway(client: SupabaseLike): OrdersGateway
       })
       throwError(error)
       const row = asRow(data)
-      return asRows(row?.orderIds).map((item) => str(item, 'orderId'))
+      if (!row) throw new Error('Risposta creazione ordini non valida')
+      return stringArray(row.orderIds, 'orderIds')
     },
     async listOrders(storeId) {
       const { data, error } = await client.rpc('orders_list', { p_store_id: storeId })
