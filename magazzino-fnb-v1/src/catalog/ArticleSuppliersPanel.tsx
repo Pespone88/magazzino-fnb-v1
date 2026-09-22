@@ -145,7 +145,7 @@ export function ArticleSuppliersPanel({ article, canManage, gateway, onChanged }
               {supplier.isPreferred && <span className="status-chip">Preferito</span>}
             </div>
             <span>€ {supplier.currentPackagePrice.toFixed(2)} / confezione</span>
-            <span>€ {calculateUnitPrice(supplier.currentPackagePrice, article.packageQuantity).toFixed(2)} / {article.baseUnit}</span>
+            <span>€ {calculateUnitPrice(supplier.currentPackagePrice, article.packageQuantity, article.baseUnit).toFixed(2)} / {article.baseUnit}</span>
             {supplier.supplierArticleCode && <small>Codice fornitore: {supplier.supplierArticleCode}</small>}
             <div className="button-row">
               <button className="secondary-button" onClick={() => void toggleHistory(supplier.id)} type="button">Storico prezzi</button>
