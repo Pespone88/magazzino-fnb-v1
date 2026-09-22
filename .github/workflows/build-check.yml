@@ -2,7 +2,7 @@ name: Build check
 
 on:
   push:
-    branches: [main, fix-cf-order-pricing]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
