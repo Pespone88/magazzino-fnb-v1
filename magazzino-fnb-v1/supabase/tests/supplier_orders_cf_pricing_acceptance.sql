@@ -124,7 +124,7 @@ begin
     raise exception 'CF receipt stock expected 10, got %', v_on_hand;
   end if;
 
-  select unit_cost into v_unit_cost
+  select unit_cost_snapshot into v_unit_cost
   from public.stock_movements
   where source_id=v_receipt
     and movement_type='SUPPLIER_RECEIPT'
