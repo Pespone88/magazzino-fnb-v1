@@ -1,0 +1,49 @@
+.orders-workspace { margin-top: 20px; }
+.orders-stack { display: grid; gap: 14px; }
+.orders-stack.compact { gap: 10px; }
+.orders-toolbar, .orders-list-header, .order-card-heading, .orders-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.orders-list-header h2, .orders-stack h2, .orders-stack h3 { margin: 0; }
+.muted { color: #6b7280; line-height: 1.45; margin: 4px 0; }
+.order-card {
+  border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px;
+  background: #fff; color: #111827; text-align: left;
+}
+.order-list-card { width: 100%; cursor: pointer; }
+.order-list-card:hover { border-color: #9ca3af; }
+.order-card-alert { border-color: #f59e0b; }
+.order-check { display: flex; align-items: center; gap: 9px; }
+.status-chip {
+  display: inline-block; padding: 6px 9px; border-radius: 999px;
+  background: #eef0f3; color: #374151; font-size: 12px; white-space: nowrap;
+}
+.status-chip.warning { background: #fff7ed; color: #9a3412; }
+.stock-inline { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; color: #4b5563; font-size: 13px; }
+.order-form-grid, .receipt-grid {
+  display: grid; gap: 10px; margin-top: 12px;
+}
+.order-form-grid label, .receipt-grid label, .orders-field {
+  display: grid; gap: 6px; color: #374151; font-size: 13px; font-weight: 700;
+}
+.order-form-grid input, .order-form-grid select,
+.receipt-grid input, .orders-field input, .orders-field select, .orders-field textarea {
+  width: 100%; min-height: 42px; border: 1px solid #d1d5db; border-radius: 9px;
+  padding: 9px 10px; background: #fff; color: #111827; font: inherit;
+}
+.orders-field textarea { resize: vertical; }
+.confirm-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; font-weight: 700; color: #92400e; }
+.orders-actions { justify-content: flex-start; margin-top: 4px; }
+.danger-link {
+  border: 0; background: transparent; color: #b91c1c; padding: 8px 0;
+  cursor: pointer; font-weight: 700; text-align: left;
+}
+.danger-link:disabled { opacity: .5; cursor: wait; }
+.form-error {
+  border-radius: 10px; padding: 10px 12px; margin: 0;
+  background: #fef2f2; color: #991b1b; font-size: 13px;
+}
+@media (min-width: 620px) {
+  .order-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receipt-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
