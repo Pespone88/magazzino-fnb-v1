@@ -4,6 +4,7 @@ import { LoginScreen } from './auth/LoginScreen'
 import { createSupabaseCatalogGateway } from './catalog/supabaseCatalogGateway'
 import { createSupabaseInventoryGateway } from './inventory/supabaseInventoryGateway'
 import { supabase } from './lib/supabaseClient'
+import { createSupabaseOrdersGateway } from './orders/supabaseOrdersGateway'
 import { createSupabaseStockGateway } from './stock/supabaseStockGateway'
 
 const catalogGateway = createSupabaseCatalogGateway(
@@ -14,6 +15,9 @@ const inventoryGateway = createSupabaseInventoryGateway(
 )
 const stockGateway = createSupabaseStockGateway(
   supabase as unknown as Parameters<typeof createSupabaseStockGateway>[0],
+)
+const ordersGateway = createSupabaseOrdersGateway(
+  supabase as unknown as Parameters<typeof createSupabaseOrdersGateway>[0],
 )
 
 function AuthenticatedApplication() {
@@ -46,6 +50,7 @@ function AuthenticatedApplication() {
       context={state.context}
       gateway={catalogGateway}
       inventoryGateway={inventoryGateway}
+      ordersGateway={ordersGateway}
       stockGateway={stockGateway}
       onSignOut={signOut}
     />
