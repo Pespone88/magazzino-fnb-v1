@@ -26,8 +26,9 @@ test('validates minimum and target thresholds', () => {
   assert.deepEqual(validateThresholds(40, 20), ['L’obiettivo non può essere inferiore al minimo'])
 })
 
-test('calculates unit price', () => {
-  assert.equal(calculateUnitPrice(18.5, 2.5), 7.4)
+test('calculates unit price without dividing CF by pieces per case', () => {
+  assert.equal(calculateUnitPrice(18.5, 2.5, 'PZ'), 7.4)
+  assert.equal(calculateUnitPrice(2.9, 24, 'CF'), 2.9)
 })
 
 test('calculates price changes and significant threshold', () => {
